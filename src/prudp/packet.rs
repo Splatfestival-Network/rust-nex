@@ -59,6 +59,10 @@ pub mod flags{
 
 }
 
+pub mod types {
+    pub const SYN: u8 = 0x0;
+}
+
 impl Debug for TypesFlags{
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let stream_type = self.get_types();
@@ -196,7 +200,7 @@ impl PRUDPPacket{
 
 
         //no clue whats up with options but they are broken
-        /*let mut packet_specific_data_cursor = Cursor::new(&packet_specific_buffer);
+        let mut packet_specific_data_cursor = Cursor::new(&packet_specific_buffer);
 
         
         loop {
@@ -226,7 +230,7 @@ impl PRUDPPacket{
             if packet_specific_data_cursor.read_exact(&mut option_data).is_err(){
                 break;
             }
-        }*/
+        }
 
 
         let mut payload = vec![0u8; header.payload_size as usize];

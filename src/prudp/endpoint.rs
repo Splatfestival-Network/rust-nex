@@ -3,7 +3,7 @@ use std::net::UdpSocket;
 use std::sync::{Arc, RwLock};
 use log::{error, info};
 use rand::random;
-use crate::prudp::packet::{flags, PRUDPPacket, VirtualPort};
+use crate::prudp::packet::{flags, PRUDPPacket, types, VirtualPort};
 use crate::prudp::sockaddr::PRUDPSockAddr;
 
 #[derive(Debug)]
@@ -60,7 +60,7 @@ impl Endpoint{
             return;
         };
 
-        if ((packet.header.types_and_flags.get_flags() & flags::NEED_ACK) != 0) ||
+        if //((packet.header.types_and_flags.get_flags() & flags::NEED_ACK) != 0) ||
            ((packet.header.types_and_flags.get_flags() & flags::ACK) != 0) ||
            ((packet.header.types_and_flags.get_flags() & flags::RELIABLE) != 0) ||
             ((packet.header.types_and_flags.get_flags() & flags::MULTI_ACK) != 0) {
@@ -70,7 +70,12 @@ impl Endpoint{
         }
 
 
+        match packet.header.types_and_flags.get_types() {
+            types::SYN => {
 
+            }
+            _ => unimplemented!()
+        }
 
 
     }
