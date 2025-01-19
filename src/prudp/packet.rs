@@ -70,7 +70,7 @@ impl VirtualPort{
 
     #[inline]
     pub const fn get_port_number(self) -> u8 {
-        (self.0 & 0xF0)
+        (self.0 & 0x0F)
     }
 
     #[inline]
