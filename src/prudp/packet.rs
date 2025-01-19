@@ -65,24 +65,26 @@ pub struct VirtualPort(u8);
 impl VirtualPort{
     #[inline]
     pub const fn get_stream_type(self) -> u8 {
-        (self.0 & 0x0F)
-    }
-
-    #[inline]
-    pub const fn get_port_number(self) -> u8 {
         (self.0 & 0xF0) >> 4
     }
 
     #[inline]
-    pub fn stream_type(self, val: u8) -> Self {
-        let masked_val = val & 0xF0;
+    pub const fn get_port_number(self) -> u8 {
+        (self.0 & 0xF0)
+    }
 
-        Self((self.0 & 0x0F) | masked_val)
+    #[inline]
+    pub fn stream_type(self, val: u8) -> Self {
+        let masked_val = val & 0x0F;
+        assert_eq!(masked_val, val);
+
+        Self((self.0 & 0xF0) | masked_val)
     }
 
     #[inline]
     pub fn port_number(self, val: u8) -> Self {
         let masked_val = val & 0x0F;
+        assert_eq!(masked_val, val);
 
         Self((self.0 & 0x0F) | (masked_val << 4))
     }

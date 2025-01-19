@@ -63,7 +63,7 @@ impl NexServer{
             };
 
             let Some(endpoint) = endpoints.iter().find(|e|{
-                e.get_virual_port().get_port_number() == connection.prudp_addr.virtual_port.get_port_number()
+                e.get_virual_port().get_port_number() == packet.header.destination_port.get_port_number()
             }) else {
                 error!("connection to invalid endpoint({}) attempted by {}", connection.prudp_addr.virtual_port.get_port_number(), connection.prudp_addr.regular_socket_addr);
                 continue;
