@@ -1,14 +1,15 @@
 use std::{env, io, thread};
+use std::cell::OnceCell;
 use std::io::Cursor;
 use std::marker::PhantomData;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, TcpStream, UdpSocket};
 use std::net::SocketAddr::V4;
 use std::ops::{Deref, DerefMut};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::JoinHandle;
 use once_cell::sync::Lazy;
-use log::{error, info};
+use log::{error, info, trace, warn};
 use crate::prudp::auth_module::AuthModule;
 use crate::prudp::endpoint::Endpoint;
 use crate::prudp::packet::{PRUDPPacket, VirtualPort};
@@ -21,15 +22,15 @@ static SERVER_DATAGRAMS: Lazy<u8> = Lazy::new(||{
 });
 
 pub struct NexServer{
-    pub endpoints: RwLock<Vec<Endpoint>>,
+    pub endpoints: OnceLock<Vec<Endpoint>>,
     pub running: AtomicBool,
     //pub auth_module: Arc<dyn AuthModule>
     _no_outside_construction: PhantomData<()>
 }
 
 pub struct Connection<'a>{
-    socket: &'a UdpSocket,
-    prudp_addr: PRUDPSockAddr
+    pub socket: &'a UdpSocket,
+    pub prudp_addr: PRUDPSockAddr
 }
 
 
@@ -49,14 +50,17 @@ impl NexServer{
                 },
             };
 
-            info!("got valid prudp packet from someone({}): \n{:?}", addr, packet);
+            trace!("got valid prudp packet from someone({}): \n{:?}", addr, packet);
 
             let connection = Connection{
                 socket,
                 prudp_addr: packet.source_sockaddr(addr)
             };
 
-            let endpoints = self.endpoints.read().expect("poison");
+            let Some(endpoints) = self.endpoints.get() else{
+                warn!("Got a message: ignoring because the server is still starting or the endpoints havent been set up");
+                break;
+            };
 
             let Some(endpoint) = endpoints.iter().find(|e|{
                 e.get_virual_port().get_port_number() == connection.prudp_addr.virtual_port.get_port_number()
@@ -65,10 +69,9 @@ impl NexServer{
                 continue;
             };
 
+            trace!("sending packet to endpoint");
 
-
-
-
+            endpoint.process_packet(&connection, &packet);
         }
     }
 

@@ -3,9 +3,11 @@ use std::{env, fs};
 use std::fs::File;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use chrono::Local;
-use log::info;
+use log::{info, trace};
 use once_cell::sync::Lazy;
 use simplelog::{ColorChoice, CombinedLogger, Config, LevelFilter, TerminalMode, TermLogger, WriteLogger};
+use crate::prudp::endpoint::Endpoint;
+use crate::prudp::packet::VirtualPort;
 use crate::prudp::server::NexServer;
 
 mod endianness;
@@ -29,7 +31,7 @@ fn main() {
     CombinedLogger::init(
         vec![
             TermLogger::new(LevelFilter::Info, Config::default(), TerminalMode::Mixed, ColorChoice::Auto),
-            WriteLogger::new(LevelFilter::Info, Config::default(), {
+            WriteLogger::new(LevelFilter::max(), Config::default(), {
                 fs::create_dir_all("log").unwrap();
                 File::create(format!("log/{}.log", Local::now().to_rfc2822())).unwrap()
             })
@@ -44,7 +46,17 @@ fn main() {
         NexServer::new(SocketAddrV4::new(*OWN_IP, *AUTH_SERVER_PORT))
         .expect("unable to startauth server");
 
-    info!("joining auth server");
+    info!("setting up endpoints");
+
+    let auth_endpoints = vec![
+        Endpoint::new(VirtualPort::new(1,10))
+    ];
+
+    auth_server.endpoints.set(auth_endpoints)
+        .expect("endpoints were somehow set by something else???");
+
+
+    trace!("joining auth server");
 
     auth_server_join_handle.join().unwrap();
 }

@@ -63,14 +63,17 @@ impl Debug for TypesFlags{
 pub struct VirtualPort(u8);
 
 impl VirtualPort{
-    pub fn get_stream_type(self) -> u8 {
+    #[inline]
+    pub const fn get_stream_type(self) -> u8 {
         (self.0 & 0xF0) >> 4
     }
 
-    pub fn get_port_number(self) -> u8 {
+    #[inline]
+    pub const fn get_port_number(self) -> u8 {
         (self.0 & 0x0F)
     }
 
+    #[inline]
     pub fn stream_type(self, val: u8) -> Self {
         let masked_val = val & 0x0F;
         assert_eq!(masked_val, val);
@@ -78,11 +81,17 @@ impl VirtualPort{
         Self((self.0 & 0xF0) | masked_val)
     }
 
+    #[inline]
     pub fn port_number(self, val: u8) -> Self {
         let masked_val = val & 0x0F;
         assert_eq!(masked_val, val);
 
         Self((self.0 & 0x0F) | (masked_val << 4))
+    }
+
+    #[inline]
+    pub fn new(port: u8, stream_type: u8) -> Self{
+        Self(0).stream_type(stream_type).port_number(port)
     }
 }
 

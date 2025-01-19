@@ -1,5 +1,5 @@
 pub mod packet;
 pub mod server;
-mod endpoint;
+pub mod endpoint;
 mod auth_module;
 mod sockaddr;
