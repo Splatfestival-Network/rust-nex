@@ -48,6 +48,8 @@ impl NexServer{
     }
 
     fn server_thread_entry(self: Arc<Self>, socket: Arc<UdpSocket>){
+        info!("starting datagram thread");
+
         while self.running.load(Ordering::Relaxed) {
             // yes we actually allow the max udp to be read lol
             let mut msg_buffer = vec![0u8; 65507];
@@ -56,7 +58,7 @@ impl NexServer{
                 .expect("Datagram thread crashed due to unexpected error from recv_from");
 
             let current_msg = &msg_buffer[0..len];
-
+            info!("attempting to process message");
             self.process_prudp_packets(addr, current_msg);
         }
     }
@@ -77,6 +79,7 @@ impl NexServer{
         for _ in 0..*SERVER_DATAGRAMS {
             let socket = socket.clone();
             let server= arc.clone();
+
             thread = Some(thread::spawn(move || {
                 server.server_thread_entry(socket);
             }));
