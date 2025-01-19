@@ -2,10 +2,12 @@ use std::fmt::{Debug, Formatter};
 use std::hint::unreachable_unchecked;
 use std::io;
 use std::io::{Cursor, ErrorKind, Read, Seek};
+use std::net::SocketAddrV4;
 use bytemuck::{Pod, Zeroable};
 use thiserror::Error;
 use v_byte_macros::{EnumTryInto, SwapEndian};
 use crate::endianness::{IS_BIG_ENDIAN, IS_LITTLE_ENDIAN, ReadExtensions};
+use crate::prudp::sockaddr::PRUDPSockAddr;
 
 #[derive(Error, Debug)]
 pub enum Error{
@@ -62,11 +64,11 @@ pub struct VirtualPort(u8);
 
 impl VirtualPort{
     pub fn get_stream_type(self) -> u8 {
-        (self.0 & 0x0F) as u8
+        (self.0 & 0xF0) >> 4
     }
 
     pub fn get_port_number(self) -> u8 {
-        (self.0 & 0xF0) >> 4
+        (self.0 & 0x0F)
     }
 
     pub fn stream_type(self, val: u8) -> Self {
@@ -114,7 +116,8 @@ enum PacketSpecificData{
 
 #[derive(Debug)]
 pub struct PRUDPPacket{
-    pub header: PRUDPHeader
+    pub header: PRUDPHeader,
+    pub payload: Vec<u8>
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -208,13 +211,21 @@ impl PRUDPPacket{
         }*/
 
 
-        let mut packet_payload = vec![0u8; header.payload_size as usize];
+        let mut payload = vec![0u8; header.payload_size as usize];
 
-        reader.read_exact(&mut packet_payload)?;
+        reader.read_exact(&mut payload)?;
 
         Ok(Self{
-            header
+            header,
+            payload
         })
+    }
+
+    pub fn source_sockaddr(&self,socket_addr_v4: SocketAddrV4) -> PRUDPSockAddr{
+        PRUDPSockAddr{
+            regular_socket_addr: socket_addr_v4,
+            virtual_port: self.header.source_port
+        }
     }
 }
 

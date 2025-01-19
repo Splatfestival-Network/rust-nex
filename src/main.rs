@@ -38,7 +38,7 @@ fn main() {
 
     dotenv::dotenv().ok();
 
-    info!("starting auth server");
+    info!("starting auth server on {}:{}", *OWN_IP, *AUTH_SERVER_PORT);
 
     let (auth_server, auth_server_join_handle) =
         NexServer::new(SocketAddrV4::new(*OWN_IP, *AUTH_SERVER_PORT))
