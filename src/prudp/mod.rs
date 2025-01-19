@@ -1,4 +1,4 @@
 pub mod packet;
-mod server;
+pub mod server;
 mod endpoint;
 mod auth_module;
