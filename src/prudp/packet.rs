@@ -78,7 +78,7 @@ impl VirtualPort{
         let masked_val = val & 0x0F;
         assert_eq!(masked_val, val);
 
-        Self((self.0 & 0xF0) | masked_val)
+        Self((self.0 & 0x0F) | (masked_val << 4))
     }
 
     #[inline]
@@ -86,7 +86,7 @@ impl VirtualPort{
         let masked_val = val & 0x0F;
         assert_eq!(masked_val, val);
 
-        Self((self.0 & 0x0F) | (masked_val << 4))
+        Self((self.0 & 0xF0) | masked_val)
     }
 
     #[inline]
