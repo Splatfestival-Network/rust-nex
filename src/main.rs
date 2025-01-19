@@ -18,6 +18,12 @@ static AUTH_SERVER_PORT: Lazy<u16> = Lazy::new(||{
         .unwrap_or(10000)
 });
 
+static OWN_IP: Lazy<Ipv4Addr> = Lazy::new(||{
+    env::var("SERVER_IP")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .expect("no public ip specified")
+});
 
 fn main() {
     CombinedLogger::init(
@@ -35,7 +41,7 @@ fn main() {
     info!("starting auth server");
 
     let (auth_server, auth_server_join_handle) =
-        NexServer::new(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, *AUTH_SERVER_PORT))
+        NexServer::new(SocketAddrV4::new(*OWN_IP, *AUTH_SERVER_PORT))
         .expect("unable to startauth server");
 
     info!("joining auth server");
