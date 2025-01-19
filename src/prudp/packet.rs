@@ -76,7 +76,6 @@ impl VirtualPort{
     #[inline]
     pub fn stream_type(self, val: u8) -> Self {
         let masked_val = val & 0xF0;
-        assert_eq!(masked_val, val);
 
         Self((self.0 & 0x0F) | masked_val)
     }
@@ -84,7 +83,6 @@ impl VirtualPort{
     #[inline]
     pub fn port_number(self, val: u8) -> Self {
         let masked_val = val & 0x0F;
-        assert_eq!(masked_val, val);
 
         Self((self.0 & 0x0F) | (masked_val << 4))
     }
