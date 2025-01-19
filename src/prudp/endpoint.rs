@@ -64,7 +64,7 @@ impl Endpoint{
            ((packet.header.types_and_flags.get_flags() & flags::ACK) != 0) ||
            ((packet.header.types_and_flags.get_flags() & flags::RELIABLE) != 0) ||
             ((packet.header.types_and_flags.get_flags() & flags::MULTI_ACK) != 0) {
-            unimplemented!()
+            unimplemented!("{}", packet.header.types_and_flags)
         }
 
 
