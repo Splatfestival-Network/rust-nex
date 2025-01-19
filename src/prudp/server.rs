@@ -1,13 +1,13 @@
 use std::{env, io, thread};
 use std::io::Cursor;
 use std::marker::PhantomData;
-use std::net::{Ipv4Addr, SocketAddrV4, UdpSocket};
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket};
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::JoinHandle;
 use once_cell::sync::Lazy;
-use log::error;
+use log::{error, info};
 use crate::prudp::auth_module::AuthModule;
 use crate::prudp::endpoint::Endpoint;
 use crate::prudp::packet::PRUDPPacket;
@@ -29,7 +29,7 @@ impl NexServer{
     fn process_prudp_packet(&self, packet: &PRUDPPacket){
 
     }
-    fn process_prudp_packets(&self, addr: Ipv4Addr, udp_message: &[u8]){
+    fn process_prudp_packets(&self, addr: SocketAddr, udp_message: &[u8]){
         let mut stream = Cursor::new(udp_message);
 
         while stream.position() as usize != udp_message.len() {
@@ -40,6 +40,8 @@ impl NexServer{
                     break;
                 },
             };
+
+            info!("got valid prudp packet from someone({}): \n{:?}", addr, packet);
 
 
         }
@@ -55,7 +57,7 @@ impl NexServer{
 
             let current_msg = &msg_buffer[0..len];
 
-
+            self.process_prudp_packets(addr, current_msg);
         }
     }
     
