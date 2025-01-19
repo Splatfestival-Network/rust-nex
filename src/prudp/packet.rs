@@ -50,6 +50,15 @@ impl TypesFlags{
     }
 }
 
+pub mod flags{
+    pub const ACK: u16 = 0x001;
+    pub const RELIABLE: u16 = 0x002;
+    pub const NEED_ACK: u16 = 0x004;
+    pub const HAS_SIZE: u16 = 0x008;
+    pub const MULTI_ACK: u16 = 0x200;
+
+}
+
 impl Debug for TypesFlags{
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let stream_type = self.get_types();
@@ -59,7 +68,7 @@ impl Debug for TypesFlags{
 }
 
 #[repr(transparent)]
-#[derive(Copy, Clone, Pod, Zeroable, SwapEndian)]
+#[derive(PartialEq, Eq, Copy, Clone, Pod, Zeroable, SwapEndian, Hash)]
 pub struct VirtualPort(u8);
 
 impl VirtualPort{

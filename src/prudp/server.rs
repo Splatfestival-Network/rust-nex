@@ -23,14 +23,10 @@ static SERVER_DATAGRAMS: Lazy<u8> = Lazy::new(||{
 
 pub struct NexServer{
     pub endpoints: OnceLock<Vec<Endpoint>>,
+    pub socket: Arc<UdpSocket>,
     pub running: AtomicBool,
     //pub auth_module: Arc<dyn AuthModule>
     _no_outside_construction: PhantomData<()>
-}
-
-pub struct Connection<'a>{
-    pub socket: &'a UdpSocket,
-    pub prudp_addr: PRUDPSockAddr
 }
 
 
@@ -52,10 +48,7 @@ impl NexServer{
 
             trace!("got valid prudp packet from someone({}): \n{:?}", addr, packet);
 
-            let connection = Connection{
-                socket,
-                prudp_addr: packet.source_sockaddr(addr)
-            };
+            let connection = packet.source_sockaddr(addr);
 
             let Some(endpoints) = self.endpoints.get() else{
                 warn!("Got a message: ignoring because the server is still starting or the endpoints havent been set up");
@@ -65,13 +58,13 @@ impl NexServer{
             let Some(endpoint) = endpoints.iter().find(|e|{
                 e.get_virual_port().get_port_number() == packet.header.destination_port.get_port_number()
             }) else {
-                error!("connection to invalid endpoint({}) attempted by {}", packet.header.destination_port.get_port_number(), connection.prudp_addr.regular_socket_addr);
+                error!("connection to invalid endpoint({}) attempted by {}", packet.header.destination_port.get_port_number(), connection.regular_socket_addr);
                 continue;
             };
 
             trace!("sending packet to endpoint");
 
-            endpoint.process_packet(&connection, &packet);
+            endpoint.process_packet(connection, &packet);
         }
     }
 
@@ -97,15 +90,16 @@ impl NexServer{
     }
     
     pub fn new(addr: SocketAddrV4) -> io::Result<(Arc<Self>, JoinHandle<()>)>{
+        let socket = Arc::new(UdpSocket::bind(addr)?);
+
         let own_impl = NexServer{
             endpoints: Default::default(),
             running: AtomicBool::new(true),
+            socket: socket.clone(),
             _no_outside_construction: Default::default()
         };
 
         let arc = Arc::new(own_impl);
-
-        let socket = Arc::new(UdpSocket::bind(addr)?);
 
         let mut thread = None;
 
