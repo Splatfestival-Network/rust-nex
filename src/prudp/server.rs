@@ -23,7 +23,7 @@ static SERVER_DATAGRAMS: Lazy<u8> = Lazy::new(||{
 
 pub struct NexServer{
     pub endpoints: OnceLock<Vec<Endpoint>>,
-    pub socket: Arc<UdpSocket>,
+    pub socket: UdpSocket,
     pub running: AtomicBool,
     //pub auth_module: Arc<dyn AuthModule>
     _no_outside_construction: PhantomData<()>
@@ -68,7 +68,7 @@ impl NexServer{
         }
     }
 
-    fn server_thread_entry(self: Arc<Self>, socket: Arc<UdpSocket>){
+    fn server_thread_entry(self: Arc<Self>, socket: UdpSocket){
         info!("starting datagram thread");
 
         while self.running.load(Ordering::Relaxed) {
@@ -90,12 +90,12 @@ impl NexServer{
     }
     
     pub fn new(addr: SocketAddrV4) -> io::Result<(Arc<Self>, JoinHandle<()>)>{
-        let socket = Arc::new(UdpSocket::bind(addr)?);
+        let socket = UdpSocket::bind(addr)?;
 
         let own_impl = NexServer{
             endpoints: Default::default(),
             running: AtomicBool::new(true),
-            socket: socket.clone(),
+            socket: socket.try_clone().unwrap(),
             _no_outside_construction: Default::default()
         };
 
@@ -104,7 +104,7 @@ impl NexServer{
         let mut thread = None;
 
         for _ in 0..*SERVER_DATAGRAMS {
-            let socket = socket.clone();
+            let socket = socket.try_clone().unwrap();
             let server= arc.clone();
 
             thread = Some(thread::spawn(move || {

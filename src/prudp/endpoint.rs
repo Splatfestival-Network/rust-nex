@@ -9,7 +9,7 @@ use crate::prudp::sockaddr::PRUDPSockAddr;
 #[derive(Debug)]
 pub struct Endpoint{
     virtual_port: VirtualPort,
-    socket: Arc<UdpSocket>,
+    socket: UdpSocket,
     connections: RwLock<HashMap<PRUDPSockAddr, Connection>>
 }
 
@@ -20,7 +20,7 @@ pub struct Connection{
 }
 
 impl Endpoint{
-    pub fn new(socket: Arc<UdpSocket>, port: VirtualPort) ->  Self{
+    pub fn new(socket: UdpSocket, port: VirtualPort) ->  Self{
         Self{
             socket,
             virtual_port: port,
@@ -72,7 +72,10 @@ impl Endpoint{
 
         match packet.header.types_and_flags.get_types() {
             types::SYN => {
+                // reset heartbeat?
+                let response_header = packet.base_response_header();
 
+                
             }
             _ => unimplemented!()
         }

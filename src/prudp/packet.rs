@@ -4,13 +4,14 @@ use std::io;
 use std::io::{Cursor, ErrorKind, Read, Seek};
 use std::net::SocketAddrV4;
 use bytemuck::{Pod, Zeroable};
+use log::{error, warn};
 use thiserror::Error;
 use v_byte_macros::{EnumTryInto, SwapEndian};
 use crate::endianness::{IS_BIG_ENDIAN, IS_LITTLE_ENDIAN, ReadExtensions};
 use crate::prudp::sockaddr::PRUDPSockAddr;
 
 #[derive(Error, Debug)]
-pub enum Error{
+pub enum Error {
     #[error("{0}")]
     IO(#[from] io::Error),
     #[error("invalid magic {0:#06x}")]
@@ -20,10 +21,10 @@ pub enum Error{
     #[error("invalid option id {0}")]
     InvalidOptionId(u8),
     #[error("option size {size} doesnt match expected option for given option id {id}")]
-    InvalidOptionSize{
+    InvalidOptionSize {
         id: u8,
-        size: u8
-    }
+        size: u8,
+    },
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -32,7 +33,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Copy, Clone, Pod, Zeroable, SwapEndian)]
 pub struct TypesFlags(u16);
 
-impl TypesFlags{
+impl TypesFlags {
     pub fn get_types(self) -> u8 {
         (self.0 & 0x000F) as u8
     }
@@ -46,24 +47,23 @@ impl TypesFlags{
     }
 
     pub fn flags(self, val: u16) -> Self {
-        Self((self.0 & 0x000F) | ((val << 4) & 0xFFF0) )
+        Self((self.0 & 0x000F) | ((val << 4) & 0xFFF0))
     }
 }
 
-pub mod flags{
+pub mod flags {
     pub const ACK: u16 = 0x001;
     pub const RELIABLE: u16 = 0x002;
     pub const NEED_ACK: u16 = 0x004;
     pub const HAS_SIZE: u16 = 0x008;
     pub const MULTI_ACK: u16 = 0x200;
-
 }
 
 pub mod types {
     pub const SYN: u8 = 0x0;
 }
 
-impl Debug for TypesFlags{
+impl Debug for TypesFlags {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let stream_type = self.get_types();
         let port_number = self.get_flags();
@@ -75,7 +75,7 @@ impl Debug for TypesFlags{
 #[derive(PartialEq, Eq, Copy, Clone, Pod, Zeroable, SwapEndian, Hash)]
 pub struct VirtualPort(u8);
 
-impl VirtualPort{
+impl VirtualPort {
     #[inline]
     pub const fn get_stream_type(self) -> u8 {
         (self.0 & 0xF0) >> 4
@@ -103,12 +103,12 @@ impl VirtualPort{
     }
 
     #[inline]
-    pub fn new(port: u8, stream_type: u8) -> Self{
+    pub fn new(port: u8, stream_type: u8) -> Self {
         Self(0).stream_type(stream_type).port_number(port)
     }
 }
 
-impl Debug for VirtualPort{
+impl Debug for VirtualPort {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let stream_type = self.get_stream_type();
         let port_number = self.get_port_number();
@@ -118,7 +118,7 @@ impl Debug for VirtualPort{
 
 #[repr(C, packed)]
 #[derive(Debug, Copy, Clone, Pod, Zeroable, SwapEndian)]
-pub struct PRUDPHeader{
+pub struct PRUDPHeader {
     magic: [u8; 2],
     version: u8,
     pub packet_specific_size: u8,
@@ -132,22 +132,23 @@ pub struct PRUDPHeader{
 }
 #[repr(u16)]
 #[derive(EnumTryInto)]
-enum PacketSpecificData{
+enum PacketSpecificData {
     E = 0x10
 }
 
-#[derive(Debug)]
-pub struct PRUDPPacket{
+#[derive(Debug, Clone)]
+pub struct PRUDPPacket {
     pub header: PRUDPHeader,
-    pub payload: Vec<u8>
+    pub payload: Vec<u8>,
+    pub options: Vec<(u8, Vec<u8>)>,
 }
 
 #[derive(Copy, Clone, Debug)]
 // Invariant: can only contain 0, 1, 2, 3 or 4
 struct OptionId(u8);
 
-impl OptionId{
-    fn new(val: u8) -> Result<Self>{
+impl OptionId {
+    fn new(val: u8) -> Result<Self> {
         // Invariant is upheld because we only create the object if it doesn't violate the invariant
         match val {
             0 | 1 | 2 | 3 | 4 => Ok(Self(val)),
@@ -155,8 +156,8 @@ impl OptionId{
         }
     }
 
-    fn option_type_size(self) -> u8{
-        match self.0{
+    fn option_type_size(self) -> u8 {
+        match self.0 {
             0 => 4,
             1 => 16,
             2 => 1,
@@ -169,40 +170,41 @@ impl OptionId{
     }
 }
 
-impl Into<u8> for OptionId{
+impl Into<u8> for OptionId {
     fn into(self) -> u8 {
         self.0
     }
 }
 
-impl PRUDPPacket{
-    pub fn new(reader: &mut (impl Read + Seek)) -> Result<Self>{
-       let header: PRUDPHeader = reader.read_struct(IS_BIG_ENDIAN)?;
+impl PRUDPPacket {
+    pub fn new(reader: &mut (impl Read + Seek)) -> Result<Self> {
+        let header: PRUDPHeader = reader.read_struct(IS_BIG_ENDIAN)?;
 
-        if header.magic[0] != 0xEA || 
-            header.magic[1] != 0xD0{
+        if header.magic[0] != 0xEA ||
+            header.magic[1] != 0xD0 {
             return Err(Error::InvalidMagic(u16::from_be_bytes(header.magic)));
         }
 
-        if header.version != 1{
-            return Err(Error::InvalidVersion(header.version))
+        if header.version != 1 {
+            return Err(Error::InvalidVersion(header.version));
         }
 
         //discard it for now
         let _: [u8; 16] = reader.read_struct(IS_BIG_ENDIAN)?;
 
-        assert_eq!(reader.stream_position().ok(), Some(14+16));
+        assert_eq!(reader.stream_position().ok(), Some(14 + 16));
 
         let mut packet_specific_buffer = vec![0u8; header.packet_specific_size as usize];
 
         reader.read_exact(&mut packet_specific_buffer)?;
 
 
-
         //no clue whats up with options but they are broken
         let mut packet_specific_data_cursor = Cursor::new(&packet_specific_buffer);
 
-        
+        let mut options = Vec::new();
+
+
         loop {
             let Ok(option_id): io::Result<u8> = packet_specific_data_cursor.read_struct(IS_BIG_ENDIAN) else {
                 break
@@ -214,22 +216,27 @@ impl PRUDPPacket{
 
             if value_size == 0 {
                 // skip it if its 0 and dont check?
+                warn!("reading packets options might be going wrong");
                 continue;
             }
-            
+
             let option_id: OptionId = OptionId::new(option_id)?;
-            
-            if option_id.option_type_size() != value_size{
+
+            if option_id.option_type_size() != value_size {
+                error!("invalid packet options");
                 return Err(Error::InvalidOptionSize {
                     size: value_size,
-                    id: option_id.0
-                })
+                    id: option_id.0,
+                });
             }
 
-            let mut option_data = vec![0u8,value_size];
-            if packet_specific_data_cursor.read_exact(&mut option_data).is_err(){
+            let mut option_data = vec![0u8, value_size];
+            if packet_specific_data_cursor.read_exact(&mut option_data).is_err() {
+                error!("unable to read options");
                 break;
             }
+
+            options.push((option_id.into(), option_data));
         }
 
 
@@ -237,25 +244,42 @@ impl PRUDPPacket{
 
         reader.read_exact(&mut payload)?;
 
-        Ok(Self{
+        Ok(Self {
             header,
-            payload
+            payload,
+            options,
         })
     }
 
-    pub fn source_sockaddr(&self,socket_addr_v4: SocketAddrV4) -> PRUDPSockAddr{
-        PRUDPSockAddr{
+    pub fn source_sockaddr(&self, socket_addr_v4: SocketAddrV4) -> PRUDPSockAddr {
+        PRUDPSockAddr {
             regular_socket_addr: socket_addr_v4,
-            virtual_port: self.header.source_port
+            virtual_port: self.header.source_port,
+        }
+    }
+
+    pub fn base_response_header(&self) -> PRUDPHeader {
+        PRUDPHeader {
+            magic: [0xEA, 0xD0],
+            types_and_flags: TypesFlags(0),
+            destination_port: self.header.source_port,
+            source_port: self.header.destination_port,
+            payload_size: 0,
+            version: 1,
+            packet_specific_size: 0,
+            sequence_id: 0,
+            session_id: 0,
+            substream_id: 0,
+
         }
     }
 }
 
 #[cfg(test)]
-mod test{
+mod test {
     use super::{PRUDPHeader};
     #[test]
-    fn size_test(){
+    fn size_test() {
         assert_eq!(size_of::<PRUDPHeader>(), 14);
     }
 }

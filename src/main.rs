@@ -49,7 +49,7 @@ fn main() {
     info!("setting up endpoints");
 
     let auth_endpoints = vec![
-        Endpoint::new(auth_server.socket.clone(), VirtualPort::new(1,10))
+        Endpoint::new(auth_server.socket.try_clone().unwrap(), VirtualPort::new(1,10))
     ];
 
     auth_server.endpoints.set(auth_endpoints)
