@@ -6,9 +6,9 @@ use chrono::Local;
 use log::{info, trace};
 use once_cell::sync::Lazy;
 use simplelog::{ColorChoice, CombinedLogger, Config, LevelFilter, TerminalMode, TermLogger, WriteLogger};
-use crate::prudp::endpoint::Endpoint;
+use crate::prudp::socket::{Socket, SocketImpl};
 use crate::prudp::packet::VirtualPort;
-use crate::prudp::server::NexServer;
+use crate::prudp::router::Router;
 
 mod endianness;
 mod prudp;
@@ -27,7 +27,8 @@ static OWN_IP: Lazy<Ipv4Addr> = Lazy::new(||{
         .expect("no public ip specified")
 });
 
-fn main() {
+#[tokio::main]
+async fn main() {
     CombinedLogger::init(
         vec![
             TermLogger::new(LevelFilter::Info, Config::default(), TerminalMode::Mixed, ColorChoice::Auto),
@@ -40,23 +41,26 @@ fn main() {
 
     dotenv::dotenv().ok();
 
+    start_servers().await;
+}
+
+async fn start_servers(){
     info!("starting auth server on {}:{}", *OWN_IP, *AUTH_SERVER_PORT);
 
-    let (auth_server, auth_server_join_handle) =
-        NexServer::new(SocketAddrV4::new(*OWN_IP, *AUTH_SERVER_PORT))
-        .expect("unable to startauth server");
+    let auth_server_router =
+        Router::new(SocketAddrV4::new(*OWN_IP, *AUTH_SERVER_PORT)).await
+            .expect("unable to startauth server");
 
     info!("setting up endpoints");
 
-    let auth_endpoints = vec![
-        Endpoint::new(auth_server.socket.try_clone().unwrap(), VirtualPort::new(1,10))
-    ];
+    let mut socket =
+        Socket::new(
+            auth_server_router.clone(),
+            VirtualPort::new(1,10),
+            "6f599f81"
+        ).await.expect("unable to create socket");
 
-    auth_server.endpoints.set(auth_endpoints)
-        .expect("endpoints were somehow set by something else???");
-
-
-    trace!("joining auth server");
-
-    auth_server_join_handle.join().unwrap();
+    let Some(connection) = socket.accept().await else {
+        return;
+    };
 }

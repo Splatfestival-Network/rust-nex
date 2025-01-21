@@ -1,14 +1,19 @@
 use std::fmt::{Debug, Formatter};
 use std::hint::unreachable_unchecked;
 use std::io;
-use std::io::{Cursor, ErrorKind, Read, Seek};
+use std::io::{Cursor, ErrorKind, Read, Seek, Write};
 use std::net::SocketAddrV4;
 use bytemuck::{Pod, Zeroable};
+use hmac::{Hmac, Mac};
 use log::{error, warn};
+use md5::{Md5, Digest};
 use thiserror::Error;
 use v_byte_macros::{EnumTryInto, SwapEndian};
 use crate::endianness::{IS_BIG_ENDIAN, IS_LITTLE_ENDIAN, ReadExtensions};
+use crate::prudp::packet::PacketOption::{ConnectionSignature, FragmentId, InitialSequenceId, MaximumSubstreamId, SupportedFunctions};
 use crate::prudp::sockaddr::PRUDPSockAddr;
+
+type Md5Hmac = Hmac<Md5>;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -34,20 +39,28 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub struct TypesFlags(u16);
 
 impl TypesFlags {
-    pub fn get_types(self) -> u8 {
+    pub const fn get_types(self) -> u8 {
         (self.0 & 0x000F) as u8
     }
 
-    pub fn get_flags(self) -> u16 {
+    pub const fn get_flags(self) -> u16 {
         (self.0 & 0xFFF0) >> 4
     }
 
-    pub fn types(self, val: u8) -> Self {
+    pub const fn types(self, val: u8) -> Self {
         Self((self.0 & 0xFFF0) | (val as u16 & 0x000F))
     }
 
-    pub fn flags(self, val: u16) -> Self {
+    pub const fn flags(self, val: u16) -> Self {
         Self((self.0 & 0x000F) | ((val << 4) & 0xFFF0))
+    }
+
+    pub const fn set_flag(&mut self, val: u16){
+        self.0 |= (val & 0xFFF) << 4;
+    }
+
+    pub const fn set_types(&mut self, val: u8){
+        self.0 |= val as u16 & 0x0F;
     }
 }
 
@@ -116,7 +129,7 @@ impl Debug for VirtualPort {
     }
 }
 
-#[repr(C, packed)]
+#[repr(C)]
 #[derive(Debug, Copy, Clone, Pod, Zeroable, SwapEndian)]
 pub struct PRUDPHeader {
     magic: [u8; 2],
@@ -137,10 +150,63 @@ enum PacketSpecificData {
 }
 
 #[derive(Debug, Clone)]
+pub enum PacketOption{
+    SupportedFunctions(u32),
+    ConnectionSignature([u8; 16]),
+    FragmentId(u8),
+    InitialSequenceId(u16),
+    MaximumSubstreamId(u8)
+}
+
+impl PacketOption{
+    fn from(option_id: OptionId, option_data: &[u8]) -> io::Result<Self>{
+        let mut data_cursor = Cursor::new(option_data);
+        let val = match option_id.into(){
+            0 => SupportedFunctions(data_cursor.read_struct(IS_BIG_ENDIAN)?),
+            1 => ConnectionSignature(data_cursor.read_struct(IS_BIG_ENDIAN)?),
+            2 => FragmentId(data_cursor.read_struct(IS_BIG_ENDIAN)?),
+            3 => InitialSequenceId(data_cursor.read_struct(IS_BIG_ENDIAN)?),
+            4 => MaximumSubstreamId(data_cursor.read_struct(IS_BIG_ENDIAN)?),
+            _ => unsafe{ unreachable_unchecked() }
+        };
+
+        Ok(val)
+    }
+
+    fn write_to_stream(&self, stream: &mut impl Write) -> io::Result<()> {
+        match self {
+            SupportedFunctions(v) => {
+                stream.write_all(&[0, size_of_val(v) as u8])?;
+                stream.write_all(&v.to_le_bytes())?;
+            }
+            ConnectionSignature(v) => {
+                stream.write_all(&[1, size_of_val(v) as u8])?;
+                stream.write_all(v)?;
+            }
+            FragmentId(v) => {
+                stream.write_all(&[2, size_of_val(v) as u8])?;
+                stream.write_all(&v.to_le_bytes())?;
+            }
+            InitialSequenceId(v) => {
+                stream.write_all(&[3, size_of_val(v) as u8])?;
+                stream.write_all(&v.to_le_bytes())?;
+            }
+            MaximumSubstreamId(v) => {
+                stream.write_all(&[4, size_of_val(v) as u8])?;
+                stream.write_all(&v.to_le_bytes())?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct PRUDPPacket {
     pub header: PRUDPHeader,
+    pub packet_signature: [u8; 16],
     pub payload: Vec<u8>,
-    pub options: Vec<(u8, Vec<u8>)>,
+    pub options: Vec<PacketOption>,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -190,7 +256,7 @@ impl PRUDPPacket {
         }
 
         //discard it for now
-        let _: [u8; 16] = reader.read_struct(IS_BIG_ENDIAN)?;
+        let packet_signature: [u8; 16] = reader.read_struct(IS_BIG_ENDIAN)?;
 
         assert_eq!(reader.stream_position().ok(), Some(14 + 16));
 
@@ -236,7 +302,7 @@ impl PRUDPPacket {
                 break;
             }
 
-            options.push((option_id.into(), option_data));
+            options.push(PacketOption::from(option_id, &option_data)?);
         }
 
 
@@ -244,8 +310,11 @@ impl PRUDPPacket {
 
         reader.read_exact(&mut payload)?;
 
+
+
         Ok(Self {
             header,
+            packet_signature,
             payload,
             options,
         })
@@ -258,20 +327,84 @@ impl PRUDPPacket {
         }
     }
 
-    pub fn base_response_header(&self) -> PRUDPHeader {
-        PRUDPHeader {
-            magic: [0xEA, 0xD0],
-            types_and_flags: TypesFlags(0),
-            destination_port: self.header.source_port,
-            source_port: self.header.destination_port,
-            payload_size: 0,
-            version: 1,
-            packet_specific_size: 0,
-            sequence_id: 0,
-            session_id: 0,
-            substream_id: 0,
+    fn generate_options_bytes(&self) -> Vec<u8>{
+        let mut vec = Vec::new();
 
+        for option in &self.options{
+            option.write_to_stream(&mut vec).expect("vec should always automatically be able to extend");
         }
+
+        vec
+    }
+
+    pub fn calculate_signature_value(&self, access_key: &str, session_key: Option<[u8; 32]>, connection_signature: Option<[u8; 16]>) -> [u8; 16]{
+        let access_key_bytes = access_key.as_bytes();
+        let access_key_sum: u32 = access_key_bytes.iter().map(|v| *v as u32).sum();
+        let access_key_sum_bytes: [u8; 4] = access_key_sum.to_le_bytes();
+
+        let header_data: [u8; 8] = bytemuck::bytes_of(&self.header)[0x8..].try_into().unwrap();
+
+        let option_bytes = self.generate_options_bytes();
+
+        let mut md5 = md5::Md5::default();
+
+        md5.update(access_key_bytes);
+        let key = md5.finalize();
+
+        let mut hmac = Md5Hmac::new_from_slice(&key).expect("fuck");
+
+        hmac.write(&header_data).expect("error during hmac calculation");
+        if let Some(session_key) = session_key {
+            hmac.write(&session_key).expect("error during hmac calculation");
+        }
+        hmac.write(&access_key_sum_bytes).expect("error during hmac calculation");
+        if let Some(connection_signature) = connection_signature {
+            hmac.write(&connection_signature).expect("error during hmac calculation");
+        }
+
+        hmac.write(&option_bytes).expect("error during hmac calculation");
+
+        hmac.write_all(&self.payload).expect("error during hmac calculation");
+
+        hmac.finalize().into_bytes()[0..16].try_into().expect("invalid hmac size")
+    }
+
+    pub fn calculate_and_assign_signature(&mut self, access_key: &str, session_key: Option<[u8; 32]>, connection_signature: Option<[u8; 16]>){
+        self.packet_signature = self.calculate_signature_value(access_key, session_key, connection_signature);
+    }
+
+    pub fn base_response_packet(&self) -> Self {
+        Self {
+            header: PRUDPHeader {
+                magic: [0xEA, 0xD0],
+                types_and_flags: TypesFlags(0),
+                destination_port: self.header.source_port,
+                source_port: self.header.destination_port,
+                payload_size: 0,
+                version: 1,
+                packet_specific_size: 0,
+                sequence_id: 0,
+                session_id: 0,
+                substream_id: 0,
+
+            },
+            packet_signature: [0; 16],
+            payload: Default::default(),
+            options: Default::default()
+        }
+    }
+
+    pub fn write_to(&self, writer: &mut impl Write) -> io::Result<()>{
+        writer.write_all(bytemuck::bytes_of(&self.header))?;
+        writer.write_all(&self.packet_signature)?;
+
+        for option in &self.options{
+            option.write_to_stream(writer)?;
+        }
+
+        writer.write_all(&self.payload)?;
+
+        Ok(())
     }
 }
 
