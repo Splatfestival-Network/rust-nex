@@ -5,7 +5,7 @@ use std::io::{Cursor, ErrorKind, Read, Seek, Write};
 use std::net::SocketAddrV4;
 use bytemuck::{Pod, Zeroable};
 use hmac::{Hmac, Mac};
-use log::{error, warn};
+use log::{error, trace, warn};
 use md5::{Md5, Digest};
 use thiserror::Error;
 use v_byte_macros::{EnumTryInto, SwapEndian};
@@ -244,7 +244,9 @@ impl Into<u8> for OptionId {
 
 impl PRUDPPacket {
     pub fn new(reader: &mut (impl Read + Seek)) -> Result<Self> {
+        trace!("reading header");
         let header: PRUDPHeader = reader.read_struct(IS_BIG_ENDIAN)?;
+        trace!("validating header");
 
         if header.magic[0] != 0xEA ||
             header.magic[1] != 0xD0 {
@@ -255,10 +257,13 @@ impl PRUDPPacket {
             return Err(Error::InvalidVersion(header.version));
         }
 
-        //discard it for now
+        trace!("reading packet signature");
+
         let packet_signature: [u8; 16] = reader.read_struct(IS_BIG_ENDIAN)?;
 
         assert_eq!(reader.stream_position().ok(), Some(14 + 16));
+
+        trace!("reading options data");
 
         let mut packet_specific_buffer = vec![0u8; header.packet_specific_size as usize];
 
@@ -270,7 +275,7 @@ impl PRUDPPacket {
 
         let mut options = Vec::new();
 
-
+        trace!("parsing options");
         loop {
             let Ok(option_id): io::Result<u8> = packet_specific_data_cursor.read_struct(IS_BIG_ENDIAN) else {
                 break
@@ -305,7 +310,7 @@ impl PRUDPPacket {
             options.push(PacketOption::from(option_id, &option_data)?);
         }
 
-
+        trace!("reading payload");
         let mut payload = vec![0u8; header.payload_size as usize];
 
         reader.read_exact(&mut payload)?;
