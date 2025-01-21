@@ -160,7 +160,6 @@ pub enum PacketOption{
 
 impl PacketOption{
     fn from(option_id: OptionId, option_data: &[u8]) -> io::Result<Self>{
-        trace!("reading option of type: {:?}", option_id);
 
         let mut data_cursor = Cursor::new(option_data);
         let val = match option_id.into(){
@@ -246,9 +245,7 @@ impl Into<u8> for OptionId {
 
 impl PRUDPPacket {
     pub fn new(reader: &mut (impl Read + Seek)) -> Result<Self> {
-        trace!("reading header");
         let header: PRUDPHeader = reader.read_struct(IS_BIG_ENDIAN)?;
-        trace!("validating header");
 
         if header.magic[0] != 0xEA ||
             header.magic[1] != 0xD0 {
@@ -259,13 +256,10 @@ impl PRUDPPacket {
             return Err(Error::InvalidVersion(header.version));
         }
 
-        trace!("reading packet signature");
 
         let packet_signature: [u8; 16] = reader.read_struct(IS_BIG_ENDIAN)?;
 
         assert_eq!(reader.stream_position().ok(), Some(14 + 16));
-
-        trace!("reading options data");
 
         let mut packet_specific_buffer = vec![0u8; header.packet_specific_size as usize];
 
@@ -277,7 +271,6 @@ impl PRUDPPacket {
 
         let mut options = Vec::new();
 
-        trace!("parsing options");
         loop {
             let Ok(option_id): io::Result<u8> = packet_specific_data_cursor.read_struct(IS_BIG_ENDIAN) else {
                 break
@@ -303,8 +296,8 @@ impl PRUDPPacket {
                 });
             }
 
-            let mut option_data = vec![0u8, value_size];
-            if packet_specific_data_cursor.read_exact(&mut option_data).is_err() {
+            let mut option_data = vec![0u8; value_size as usize];
+            if packet_specific_data_cursor.read_exact(&mut option_data[..]).is_err() {
                 error!("unable to read options");
                 break;
             }
@@ -417,9 +410,24 @@ impl PRUDPPacket {
 
 #[cfg(test)]
 mod test {
-    use super::{PRUDPHeader};
+    use super::{OptionId, PacketOption, PRUDPHeader};
     #[test]
     fn size_test() {
         assert_eq!(size_of::<PRUDPHeader>(), 14);
+    }
+
+    #[test]
+    fn test_options(){
+        let packet_types = [0,1,2,3,4];
+
+        for p_type in packet_types{
+            let option_id = OptionId::new(p_type).unwrap();
+
+            let buf = vec![0; option_id.option_type_size() as usize];
+
+            PacketOption::from(option_id, &buf).unwrap();
+        }
+
+
     }
 }
