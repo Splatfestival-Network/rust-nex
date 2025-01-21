@@ -160,6 +160,8 @@ pub enum PacketOption{
 
 impl PacketOption{
     fn from(option_id: OptionId, option_data: &[u8]) -> io::Result<Self>{
+        trace!("reading option of type: {:?}", option_id);
+
         let mut data_cursor = Cursor::new(option_data);
         let val = match option_id.into(){
             0 => SupportedFunctions(data_cursor.read_struct(IS_BIG_ENDIAN)?),
