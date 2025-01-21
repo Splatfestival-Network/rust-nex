@@ -50,7 +50,7 @@ impl Router {
             let packet = match PRUDPPacket::new(&mut stream){
                 Ok(p) => p,
                 Err(e) => {
-                    error!("Somebody({}) is fucking with the servers or their connection is bad", addr);
+                    error!("Somebody({}) is fucking with the servers or their connection is bad (reason: {})", addr, e);
                     break;
                 },
             };
