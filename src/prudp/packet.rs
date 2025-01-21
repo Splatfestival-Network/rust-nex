@@ -342,7 +342,7 @@ impl PRUDPPacket {
         let access_key_sum: u32 = access_key_bytes.iter().map(|v| *v as u32).sum();
         let access_key_sum_bytes: [u8; 4] = access_key_sum.to_le_bytes();
 
-        let header_data: [u8; 8] = bytemuck::bytes_of(&self.header)[0x8..].try_into().unwrap();
+        let header_data: [u8; 8] = bytemuck::bytes_of(&self.header)[0x6..].try_into().unwrap();
 
         let option_bytes = self.generate_options_bytes();
 
@@ -410,7 +410,7 @@ impl PRUDPPacket {
 
 #[cfg(test)]
 mod test {
-    use super::{OptionId, PacketOption, PRUDPHeader};
+    use super::{OptionId, PacketOption, PRUDPHeader, TypesFlags, VirtualPort};
     #[test]
     fn size_test() {
         assert_eq!(size_of::<PRUDPHeader>(), 14);
@@ -429,5 +429,27 @@ mod test {
         }
 
 
+    }
+
+    #[test]
+    fn header_read(){
+        let header = PRUDPHeader{
+            version: 0,
+            destination_port: VirtualPort(0),
+            substream_id: 0,
+            types_and_flags: TypesFlags(0),
+            session_id: 0,
+            packet_specific_size: 0,
+            payload_size: 0,
+            sequence_id: 0,
+            magic: [0xEA,0xD0],
+            source_port: VirtualPort(0)
+        };
+
+        let bytes = bytemuck::bytes_of(&header);
+
+        let bytes = &bytes[0x6..];
+
+        let header_data: [u8; 8] = bytes.try_into().unwrap();
     }
 }
