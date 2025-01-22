@@ -141,11 +141,11 @@ impl SocketImpl {
 
         if //((packet.header.types_and_flags.get_flags() & flags::NEED_ACK) != 0) ||
            //((packet.header.types_and_flags.get_flags() & flags::ACK) != 0) ||
-            ((packet.header.types_and_flags.get_flags() & flags::RELIABLE) != 0) ||
+           //((packet.header.types_and_flags.get_flags() & flags::RELIABLE) != 0) ||
             ((packet.header.types_and_flags.get_flags() & flags::MULTI_ACK) != 0) {
             let copy = packet.header.types_and_flags;
 
-            unimplemented!("{:?}", copy)
+            error!("{:?}", copy)
         }
 
 
