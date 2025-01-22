@@ -19,7 +19,7 @@ use crate::prudp::router::{Error, Router};
 use crate::prudp::sockaddr::PRUDPSockAddr;
 
 
-type Md5Hmac = Hmac<md5::Md5>;
+
 
 /// PRUDP Socket for accepting connections to then send and recieve data from those clients
 pub struct Socket(Arc<SocketImpl>, Arc<Router>, Receiver<Connection>);
@@ -85,6 +85,8 @@ impl Deref for Socket{
         &self.0
     }
 }
+
+
 
 impl SocketImpl {
     fn new(router: &Router, connection_creation_sender: Sender<Connection>, port: VirtualPort, access_key: &'static str) -> Self {
@@ -159,17 +161,11 @@ impl SocketImpl {
                 response_packet.header.types_and_flags.set_flag(flags::ACK);
                 response_packet.header.types_and_flags.set_flag(flags::HAS_SIZE);
 
-                let mut hmac = Md5Hmac::new_from_slice(&[0; 16]).expect("fuck");
 
-                let mut data = connection.regular_socket_addr.ip().octets().to_vec();
-                data.extend_from_slice(&connection.regular_socket_addr.port().to_be_bytes());
 
-                hmac.write_all(&data).expect("figuring this out was complete ass");
-                let result: [u8; 16] = hmac.finalize().into_bytes()[0..16].try_into().expect("fuck");
+                conn.signature = connection.calculate_connection_signature();
 
-                conn.signature = result;
-
-                response_packet.options.push(PacketOption::ConnectionSignature(result));
+                response_packet.options.push(ConnectionSignature(conn.signature));
 
 
 
@@ -207,6 +203,8 @@ impl SocketImpl {
                 response_packet.header.session_id = conn.session_id;
                 response_packet.header.sequence_id = 1;
 
+                response_packet.options.push(ConnectionSignature(conn.signature));
+
                 for option in &packet.options{
                     match option  {
                         MaximumSubstreamId(max_substream) => response_packet.options.push(MaximumSubstreamId(*max_substream)),
@@ -234,16 +232,5 @@ impl SocketImpl {
             _ => unimplemented!("unimplemented packet type: {}", packet.header.types_and_flags.get_types())
         }
 
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use hmac::Mac;
-    use crate::prudp::socket::Md5Hmac;
-
-    #[test]
-    fn fuck() {
-        let hmac = Md5Hmac::new_from_slice(&[0; 16]).expect("fuck");
     }
 }
