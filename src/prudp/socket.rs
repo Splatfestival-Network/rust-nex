@@ -9,10 +9,12 @@ use hmac::{Hmac, Mac};
 use log::{error, info, trace};
 use rand::random;
 use rc4::consts::U256;
+use rustls::internal::msgs::handshake::SessionId;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use crate::prudp::packet::{flags, PacketOption, PRUDPPacket, types, VirtualPort};
-use crate::prudp::packet::PacketOption::{MaximumSubstreamId, SupportedFunctions};
-use crate::prudp::packet::types::SYN;
+use crate::prudp::packet::flags::{ACK, HAS_SIZE};
+use crate::prudp::packet::PacketOption::{ConnectionSignature, MaximumSubstreamId, SupportedFunctions};
+use crate::prudp::packet::types::{CONNECT, SYN};
 use crate::prudp::router::{Error, Router};
 use crate::prudp::sockaddr::PRUDPSockAddr;
 
@@ -36,6 +38,8 @@ pub struct Connection {
     sock_addr: PRUDPSockAddr,
     id: u64,
     signature: [u8; 16],
+    server_signature: [u8; 16],
+    session_id: u8
 }
 
 
@@ -112,6 +116,8 @@ impl SocketImpl {
                     sock_addr: connection,
                     id: random(),
                     signature: [0; 16],
+                    server_signature: [0; 16],
+                    session_id: 0
                 })));
             }
             drop(conn);
@@ -144,7 +150,7 @@ impl SocketImpl {
 
 
         match packet.header.types_and_flags.get_types() {
-            types::SYN => {
+            SYN => {
                 // reset heartbeat?
                 let mut response_packet = packet.base_response_packet();
 
@@ -164,7 +170,7 @@ impl SocketImpl {
 
                 response_packet.options.push(PacketOption::ConnectionSignature(result));
 
-                response_packet.calculate_and_assign_signature(self.access_key, None, None);
+
 
                 for options in &packet.options{
                     match options{
@@ -178,6 +184,44 @@ impl SocketImpl {
                     }
                 }
 
+                response_packet.calculate_and_assign_signature(self.access_key, None, None);
+
+                let mut vec = Vec::new();
+
+                response_packet.write_to(&mut vec).expect("somehow failed to convert backet to bytes");
+
+                self.socket.send_to(&vec, connection.regular_socket_addr).await.expect("failed to send data back");
+            }
+            CONNECT => {
+                let mut response_packet = packet.base_response_packet();
+
+                response_packet.header.types_and_flags.set_types(CONNECT);
+                response_packet.header.types_and_flags.set_flag(ACK);
+                response_packet.header.types_and_flags.set_flag(HAS_SIZE);
+
+                // todo: (or not) sliding windows and stuff
+                conn.session_id = packet.header.session_id;
+                response_packet.header.session_id = conn.session_id;
+                response_packet.header.sequence_id = 1;
+
+                for option in &packet.options{
+                    match option  {
+                        MaximumSubstreamId(max_substream) => response_packet.options.push(MaximumSubstreamId(*max_substream)),
+                        SupportedFunctions(funcs) => response_packet.options.push(SupportedFunctions(*funcs)),
+                        ConnectionSignature(sig) => conn.server_signature = *sig,
+                        _ => {/* ? */}
+                    }
+                }
+
+                // Splatoon doesnt use compression so we arent gonna compress unless i at some point
+                // want to implement some server which requires it
+                // No encryption here for the same reason
+
+                // todo: implement something to do secure servers
+
+
+                response_packet.calculate_and_assign_signature(self.access_key, None, Some(conn.server_signature));
+
                 let mut vec = Vec::new();
 
                 response_packet.write_to(&mut vec).expect("somehow failed to convert backet to bytes");
@@ -186,6 +230,7 @@ impl SocketImpl {
             }
             _ => unimplemented!("unimplemented packet type: {}", packet.header.types_and_flags.get_types())
         }
+
     }
 }
 
