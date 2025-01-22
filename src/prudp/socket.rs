@@ -12,7 +12,7 @@ use rc4::consts::U256;
 use rustls::internal::msgs::handshake::SessionId;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use crate::prudp::packet::{flags, PacketOption, PRUDPPacket, types, VirtualPort};
-use crate::prudp::packet::flags::{ACK, HAS_SIZE};
+use crate::prudp::packet::flags::{ACK, HAS_SIZE, MULTI_ACK};
 use crate::prudp::packet::PacketOption::{ConnectionSignature, MaximumSubstreamId, SupportedFunctions};
 use crate::prudp::packet::types::{CONNECT, SYN};
 use crate::prudp::router::{Error, Router};
@@ -141,13 +141,14 @@ impl SocketImpl {
 
         let mut conn = conn.lock().await;
 
-        if //((packet.header.types_and_flags.get_flags() & flags::NEED_ACK) != 0) ||
-           //((packet.header.types_and_flags.get_flags() & flags::ACK) != 0) ||
-           //((packet.header.types_and_flags.get_flags() & flags::RELIABLE) != 0) ||
-            ((packet.header.types_and_flags.get_flags() & flags::MULTI_ACK) != 0) {
-            let copy = packet.header.types_and_flags;
+        if (packet.header.types_and_flags.get_flags() & ACK) != 0 {
+            info!("acknowledgement recieved");
+            return;
+        }
 
-            error!("{:?}", copy)
+        if (packet.header.types_and_flags.get_flags() & MULTI_ACK) != 0 {
+            info!("acknowledgement recieved");
+            unimplemented!()
         }
 
 
@@ -205,7 +206,9 @@ impl SocketImpl {
                     match option  {
                         MaximumSubstreamId(max_substream) => response_packet.options.push(MaximumSubstreamId(*max_substream)),
                         SupportedFunctions(funcs) => response_packet.options.push(SupportedFunctions(*funcs)),
-                        ConnectionSignature(sig) => conn.server_signature = *sig,
+                        ConnectionSignature(sig) => {
+                            conn.server_signature = *sig
+                        },
                         _ => {/* ? */}
                     }
                 }
@@ -216,6 +219,9 @@ impl SocketImpl {
 
                 // todo: implement something to do secure servers
 
+                if conn.server_signature == Default::default(){
+                    error!("didn't get connection signature from client")
+                }
 
                 response_packet.calculate_and_assign_signature(self.access_key, None, Some(conn.server_signature));
 
@@ -224,8 +230,6 @@ impl SocketImpl {
                 response_packet.write_to(&mut vec).expect("somehow failed to convert backet to bytes");
 
                 self.socket.send_to(&vec, connection.regular_socket_addr).await.expect("failed to send data back");
-
-
             }
             _ => unimplemented!("unimplemented packet type: {}", packet.header.types_and_flags.get_types())
         }
