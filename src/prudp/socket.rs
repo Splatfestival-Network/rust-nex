@@ -158,16 +158,12 @@ impl SocketImpl {
                 let mut response_packet = packet.base_response_packet();
 
                 response_packet.header.types_and_flags.set_types(SYN);
-                response_packet.header.types_and_flags.set_flag(flags::ACK);
-                response_packet.header.types_and_flags.set_flag(flags::HAS_SIZE);
-
-
+                response_packet.header.types_and_flags.set_flag(ACK);
+                response_packet.header.types_and_flags.set_flag(HAS_SIZE);
 
                 conn.signature = connection.calculate_connection_signature();
 
                 response_packet.options.push(ConnectionSignature(conn.signature));
-
-
 
                 for options in &packet.options{
                     match options{
@@ -203,7 +199,7 @@ impl SocketImpl {
                 response_packet.header.session_id = conn.session_id;
                 response_packet.header.sequence_id = 1;
 
-                response_packet.options.push(ConnectionSignature(conn.signature));
+                response_packet.options.push(ConnectionSignature(Default::default()));
 
                 for option in &packet.options{
                     match option  {
@@ -228,6 +224,8 @@ impl SocketImpl {
                 response_packet.write_to(&mut vec).expect("somehow failed to convert backet to bytes");
 
                 self.socket.send_to(&vec, connection.regular_socket_addr).await.expect("failed to send data back");
+
+
             }
             _ => unimplemented!("unimplemented packet type: {}", packet.header.types_and_flags.get_types())
         }
