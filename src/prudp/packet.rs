@@ -87,7 +87,7 @@ impl Debug for TypesFlags {
 
 #[repr(transparent)]
 #[derive(PartialEq, Eq, Copy, Clone, Pod, Zeroable, SwapEndian, Hash)]
-pub struct VirtualPort(u8);
+pub struct VirtualPort(pub(crate) u8);
 
 impl VirtualPort {
     #[inline]
@@ -200,6 +200,16 @@ impl PacketOption{
         }
 
         Ok(())
+    }
+
+    fn write_size(&self) -> u8 {
+        match self {
+            SupportedFunctions(_) => 2 + 4,
+            ConnectionSignature(_) => 2 + 16,
+            FragmentId(_) => 2 + 1,
+            InitialSequenceId(_) => 2 + 2,
+            MaximumSubstreamId(_) => 2 + 1,
+        }
     }
 }
 
@@ -374,6 +384,11 @@ impl PRUDPPacket {
         self.packet_signature = self.calculate_signature_value(access_key, session_key, connection_signature);
     }
 
+    pub fn set_sizes(&mut self){
+        self.header.packet_specific_size = self.options.iter().map(|o| o.write_size()).sum();
+        self.header.payload_size = self.payload.len() as u16;
+    }
+
     pub fn base_response_packet(&self) -> Self {
         Self {
             header: PRUDPHeader {
@@ -426,7 +441,14 @@ mod test {
 
             let buf = vec![0; option_id.option_type_size() as usize];
 
-            PacketOption::from(option_id, &buf).unwrap();
+            let opt = PacketOption::from(option_id, &buf).unwrap();
+            {
+                let mut write_buf = vec![];
+
+                opt.write_to_stream(&mut write_buf).unwrap();
+
+                assert_eq!(write_buf.len() as u8, opt.write_size())
+            }
         }
 
 
