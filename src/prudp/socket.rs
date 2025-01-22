@@ -151,6 +151,7 @@ impl SocketImpl {
 
         match packet.header.types_and_flags.get_types() {
             SYN => {
+                info!("got syn");
                 // reset heartbeat?
                 let mut response_packet = packet.base_response_packet();
 
@@ -193,6 +194,8 @@ impl SocketImpl {
                 self.socket.send_to(&vec, connection.regular_socket_addr).await.expect("failed to send data back");
             }
             CONNECT => {
+                info!("got connect");
+
                 let mut response_packet = packet.base_response_packet();
 
                 response_packet.header.types_and_flags.set_types(CONNECT);
