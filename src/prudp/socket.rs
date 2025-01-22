@@ -219,7 +219,7 @@ impl SocketImpl {
 
                 // todo: implement something to do secure servers
 
-                if conn.server_signature == Default::default(){
+                if conn.server_signature == <[u8;16] as Default>::default(){
                     error!("didn't get connection signature from client")
                 }
 
