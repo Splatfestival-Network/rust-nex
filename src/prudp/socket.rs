@@ -238,7 +238,7 @@ impl SocketImpl {
                 self.socket.send_to(&vec, connection.regular_socket_addr).await.expect("failed to send data back");
             }
             DATA => {
-
+                info!("{:?}", packet);
             }
             _ => unimplemented!("unimplemented packet type: {}", packet.header.types_and_flags.get_types())
         }
