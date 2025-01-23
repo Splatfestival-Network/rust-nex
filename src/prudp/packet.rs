@@ -10,6 +10,7 @@ use md5::{Md5, Digest};
 use thiserror::Error;
 use v_byte_macros::{EnumTryInto, SwapEndian};
 use crate::endianness::{IS_BIG_ENDIAN, IS_LITTLE_ENDIAN, ReadExtensions};
+use crate::prudp::packet::flags::ACK;
 use crate::prudp::packet::PacketOption::{ConnectionSignature, FragmentId, InitialSequenceId, MaximumSubstreamId, SupportedFunctions};
 use crate::prudp::sockaddr::PRUDPSockAddr;
 
@@ -170,7 +171,7 @@ impl PacketOption{
             2 => FragmentId(data_cursor.read_struct(IS_BIG_ENDIAN)?),
             3 => InitialSequenceId(data_cursor.read_struct(IS_BIG_ENDIAN)?),
             4 => MaximumSubstreamId(data_cursor.read_struct(IS_BIG_ENDIAN)?),
-            _ => unsafe{ unreachable_unchecked() }
+            _ => unreachable!()
         };
 
         Ok(val)
@@ -242,9 +243,7 @@ impl OptionId {
             2 => 1,
             3 => 2,
             4 => 1,
-            // Getting here would mean that the invariant has been violated, thus this isnt my 
-            // problem lmao
-            _ => unsafe { unreachable_unchecked() }
+            _ => unreachable!()
         }
     }
 }
@@ -330,6 +329,30 @@ impl PRUDPPacket {
             payload,
             options,
         })
+    }
+
+    pub fn base_acknowledgement_packet(&self) -> Self{
+        let base = self.base_response_packet();
+
+        let mut flags = self.header.types_and_flags.flags(0);
+
+        flags.set_flag(ACK);
+
+        let options = self.options
+            .iter()
+            .filter(|o| matches!(o, FragmentId(_)))
+            .collect();
+
+        Self{
+            header: PRUDPHeader{
+                types_and_flags: flags,
+                sequence_id: self.header.sequence_id,
+                substream_id: self.header.substream_id,
+                ..base.header
+            },
+            options,
+            ..base
+        }
     }
 
     pub fn source_sockaddr(&self, socket_addr_v4: SocketAddrV4) -> PRUDPSockAddr {
