@@ -341,6 +341,7 @@ impl PRUDPPacket {
         let options = self.options
             .iter()
             .filter(|o| matches!(o, FragmentId(_)))
+            .cloned()
             .collect();
 
         Self{
