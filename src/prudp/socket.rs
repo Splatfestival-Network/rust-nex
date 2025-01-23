@@ -171,7 +171,7 @@ impl SocketImpl {
                     match options {
                         SupportedFunctions(functions) => {
                             
-                            response_packet.options.push(SupportedFunctions(*functions))
+                            response_packet.options.push(SupportedFunctions(*functions & 0x04))
                         }
                         MaximumSubstreamId(max_substream) => {
                             response_packet.options.push(MaximumSubstreamId(*max_substream))
