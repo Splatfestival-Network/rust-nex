@@ -75,6 +75,7 @@ pub mod flags {
 pub mod types {
     pub const SYN: u8 = 0x0;
     pub const CONNECT: u8 = 0x1;
+    pub const DATA: u8 = 0x2;
 }
 
 impl Debug for TypesFlags {

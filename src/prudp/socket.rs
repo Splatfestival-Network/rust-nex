@@ -12,9 +12,9 @@ use rc4::consts::U256;
 use rustls::internal::msgs::handshake::SessionId;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use crate::prudp::packet::{flags, PacketOption, PRUDPPacket, types, VirtualPort};
-use crate::prudp::packet::flags::{ACK, HAS_SIZE, MULTI_ACK};
+use crate::prudp::packet::flags::{ACK, HAS_SIZE, MULTI_ACK, RELIABLE};
 use crate::prudp::packet::PacketOption::{ConnectionSignature, MaximumSubstreamId, SupportedFunctions};
-use crate::prudp::packet::types::{CONNECT, SYN};
+use crate::prudp::packet::types::{CONNECT, DATA, SYN};
 use crate::prudp::router::{Error, Router};
 use crate::prudp::sockaddr::PRUDPSockAddr;
 
@@ -147,6 +147,11 @@ impl SocketImpl {
             unimplemented!()
         }
 
+        if (packet.header.types_and_flags.get_flags() & RELIABLE) != 0 {
+            error!("unreliable packets are unimplemented");
+            unimplemented!()
+        }
+
 
         match packet.header.types_and_flags.get_types() {
             SYN => {
@@ -165,6 +170,7 @@ impl SocketImpl {
                 for options in &packet.options {
                     match options {
                         SupportedFunctions(functions) => {
+                            
                             response_packet.options.push(SupportedFunctions(*functions))
                         }
                         MaximumSubstreamId(max_substream) => {
@@ -230,6 +236,9 @@ impl SocketImpl {
                 response_packet.write_to(&mut vec).expect("somehow failed to convert backet to bytes");
 
                 self.socket.send_to(&vec, connection.regular_socket_addr).await.expect("failed to send data back");
+            }
+            DATA => {
+
             }
             _ => unimplemented!("unimplemented packet type: {}", packet.header.types_and_flags.get_types())
         }
