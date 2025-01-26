@@ -54,8 +54,8 @@ pub struct ActiveConnectionData {
     pub reliable_server_counter: u16,
     pub reliable_client_queue: VecDeque<PRUDPPacket>,
     pub connection_data_channel: Sender<Vec<u8>>,
-    pub server_encryption: Box<dyn StreamCipher + Send + Sync>,
-    pub client_decryption: Box<dyn StreamCipher + Send + Sync>,
+    server_encryption: Box<dyn StreamCipher + Send + Sync>,
+    client_decryption: Box<dyn StreamCipher + Send + Sync>,
     pub server_session_id: u8,
 }
 
@@ -379,6 +379,37 @@ impl SocketData {
             }
 
             _ => unimplemented!("unimplemented packet type: {}", packet.header.types_and_flags.get_types())
+        }
+    }
+}
+
+impl ConnectionData{
+    pub async fn finish_and_send_packet_to(&mut self, socket: &SocketData, mut packet: PRUDPPacket){
+        if (packet.header.types_and_flags.get_flags() & RELIABLE) != 0{
+            let Some(active_connection) = self.active_connection_data.as_mut() else {
+                error!("tried to send a secure packet to an inactive connection");
+                return;
+            };
+
+            packet.header.sequence_id = active_connection.reliable_server_counter;
+            active_connection.reliable_server_counter += 1;
+
+            active_connection.server_encryption.apply_keystream(&mut packet.payload);
+        }
+
+        packet.header.source_port = socket.virtual_port;
+        packet.header.destination_port = self.sock_addr.virtual_port;
+
+        packet.set_sizes();
+
+        packet.calculate_and_assign_signature(socket.access_key, None, Some(self.server_signature));
+
+        let mut vec = Vec::new();
+
+        packet.write_to(&mut vec).expect("somehow failed to convert backet to bytes");
+
+        if let Err(e) = socket.socket.send_to(&vec, self.sock_addr.regular_socket_addr).await{
+            error!("unable to send packet to destination: {}", e);
         }
     }
 }

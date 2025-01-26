@@ -49,7 +49,7 @@ pub fn generate_response(protocol_id: u8, response: RMCResponseResult) -> io::Re
     let u32_size: u32 = size as _;
 
     data_out.write_all(bytes_of(&u32_size))?;
-    data_out.push(protocol_id | 0x80);
+    data_out.push(protocol_id);
 
     match response{
         RMCResponseResult::Success {
@@ -59,7 +59,8 @@ pub fn generate_response(protocol_id: u8, response: RMCResponseResult) -> io::Re
         } => {
             data_out.push(1);
             data_out.write_all(bytes_of(&call_id))?;
-            data_out.write_all(bytes_of(&method_id))?;
+            let ored_method_id = method_id | 0x8000;
+            data_out.write_all(bytes_of(&ored_method_id))?;
             data_out.write_all(&data)?;
         },
         RMCResponseResult::Error {
@@ -81,8 +82,6 @@ pub async fn send_response(original_packet: &PRUDPPacket, socket: &SocketData, c
 
     let ConnectionData{
         active_connection_data,
-        sock_addr,
-        server_signature,
         ..
     } = connection;
 
@@ -90,15 +89,12 @@ pub async fn send_response(original_packet: &PRUDPPacket, socket: &SocketData, c
         return;
     };
 
-
     let mut packet = original_packet.base_response_packet();
 
 
     packet.header.types_and_flags.set_types(DATA);
-    packet.header.types_and_flags.set_flag(RELIABLE | HAS_SIZE | NEED_ACK);
+    packet.header.types_and_flags.set_flag((original_packet.header.types_and_flags.get_flags() & RELIABLE) | NEED_ACK);
 
-    packet.header.sequence_id = active_connection.reliable_server_counter;
-    active_connection.reliable_server_counter += 1;
     packet.header.session_id = active_connection.server_session_id;
     packet.header.substream_id = 0;
 
@@ -106,18 +102,7 @@ pub async fn send_response(original_packet: &PRUDPPacket, socket: &SocketData, c
 
     packet.payload = rmcresponse.to_data();
 
-
-    active_connection.server_encryption.apply_keystream(&mut packet.payload);
-
-    packet.set_sizes();
-    packet.calculate_and_assign_signature(socket.access_key, None, Some(*server_signature));
-
-    let mut vec = Vec::new();
-
-    packet.write_to(&mut vec).expect("somehow failed to convert backet to bytes");
-
-    socket.socket.send_to(&vec, sock_addr.regular_socket_addr).await.expect("failed to send data back");
-
+    connection.finish_and_send_packet_to(socket, packet).await;
 }
 
 //taken from kinnays error list directly

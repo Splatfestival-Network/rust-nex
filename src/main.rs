@@ -10,12 +10,14 @@ use once_cell::sync::Lazy;
 use rc4::{KeyInit, Rc4, StreamCipher};
 use rc4::consts::U5;
 use simplelog::{ColorChoice, CombinedLogger, Config, LevelFilter, TerminalMode, TermLogger, WriteLogger};
+use crate::protocols::auth;
+use crate::protocols::server::RMCProtocolServer;
 use crate::prudp::socket::{Socket, SocketData};
 use crate::prudp::packet::{PRUDPPacket, VirtualPort};
 use crate::prudp::router::Router;
 use crate::rmc::message::RMCMessage;
 use crate::rmc::response::{RMCResponse, RMCResponseResult, send_response};
-use crate::rmc::response::ErrorCode::Core_InvalidIndex;
+use crate::rmc::response::ErrorCode::{Core_InvalidIndex, Core_NotImplemented};
 
 mod endianness;
 mod prudp;
@@ -67,6 +69,10 @@ async fn start_servers(){
     info!("setting up endpoints");
 
     // dont assign it to the name _ as that will make it drop right here and now
+    let rmcserver = RMCProtocolServer::new(Box::new([
+        Box::new(auth::protocol)
+    ]));
+
     let mut _socket =
         Socket::new(
             auth_server_router.clone(),
@@ -87,30 +93,9 @@ async fn start_servers(){
                     }
                 )
             }),
-            Box::new(|p, socket, connection|{
-                Box::pin(
-                    async move {
-                        println!("{:?}",p);
-                        let Ok(rmc) = RMCMessage::new(&mut Cursor::new(&p.payload)) else {
-                            error!("error reading rmc message");
-                            return;
-                        };
-
-                        println!("recieved rmc message: {{ protocol: {}, method: {}}}", rmc.protocol_id, rmc.method_id);
-
-                        if let Some(response) = protocols::auth::try_process_via_protocol(&rmc){
-                            send_response(&p, &socket, connection, response).await;
-                        }
-
-                        send_response(&p, &socket, connection, RMCResponse{
-                            protocol_id: rmc.protocol_id as u8,
-                            response_result: RMCResponseResult::Error {
-                                call_id: rmc.call_id,
-                                error_code: Core_InvalidIndex
-                            }
-                        }).await;
-                    }
-                )
+            Box::new(move |packet, socket, connection|{
+                let rmcserver = rmcserver.clone();
+                Box::pin(async move { rmcserver.process_message(packet, &socket, connection).await; })
             })
         ).await.expect("unable to create socket");
 
@@ -155,7 +140,7 @@ mod test{
 
         let mut a = Cursor::new(&rmc_packet.rest_of_data);
 
-        let pid = rmc::structures::string::read(&mut a).expect("unable to read pid");
+        //let pid = rmc::structures::string::read(&mut a).expect("unable to read pid");
     }
 
     #[tokio::test]
