@@ -12,9 +12,10 @@ use tokio::task::JoinHandle;
 use once_cell::sync::Lazy;
 use log::{error, info, trace, warn};
 use thiserror::Error;
+use tokio::io::Join;
 use tokio::sync::RwLock;
 use crate::prudp::auth_module::AuthModule;
-use crate::prudp::socket::{Socket, SocketImpl};
+use crate::prudp::socket::{Socket, SocketData};
 use crate::prudp::packet::{PRUDPPacket, VirtualPort};
 use crate::prudp::router::Error::VirtualPortTaken;
 use crate::prudp::sockaddr::PRUDPSockAddr;
@@ -26,7 +27,7 @@ static SERVER_DATAGRAMS: Lazy<u8> = Lazy::new(||{
 });
 
 pub struct Router {
-    endpoints: RwLock<[Option<Arc<SocketImpl>>; 16]>,
+    endpoints: RwLock<[Option<Arc<SocketData>>; 16]>,
     running: AtomicBool,
     socket: Arc<UdpSocket>,
     //pub auth_module: Arc<dyn AuthModule>
@@ -43,8 +44,8 @@ impl Router {
     fn process_prudp_packet(&self, packet: &PRUDPPacket){
 
     }
-    async fn process_prudp_packets<'a>(&self, socket: &'a UdpSocket, addr: SocketAddrV4, udp_message: &[u8]){
-        let mut stream = Cursor::new(udp_message);
+    async fn process_prudp_packets<'a>(self: Arc<Self>, socket: Arc<UdpSocket>, addr: SocketAddrV4, udp_message: Vec<u8>){
+        let mut stream = Cursor::new(&udp_message);
 
         while stream.position() as usize != udp_message.len() {
             let packet = match PRUDPPacket::new(&mut stream){
@@ -93,13 +94,12 @@ impl Router {
             };
 
             let current_msg = &msg_buffer[0..len];
-            info!("attempting to process message");
 
-            self.process_prudp_packets(&socket, addr, current_msg).await;
+            tokio::spawn(self.clone().process_prudp_packets(socket.clone(), addr, current_msg.to_vec()));
         }
     }
     
-    pub async fn new(addr: SocketAddrV4) -> io::Result<Arc<Self>>{
+    pub async fn new(addr: SocketAddrV4) -> io::Result<(Arc<Self>, JoinHandle<()>)>{
         trace!("starting router on {}", addr);
 
         let socket = Arc::new(UdpSocket::bind(addr).await?);
@@ -114,14 +114,14 @@ impl Router {
         let arc = Arc::new(own_impl);
 
 
-        {
+        let task = {
             let socket = socket.clone();
             let server= arc.clone();
 
             tokio::spawn(async {
                 server.server_thread_send_entry(socket).await;
-            });
-        }
+            })
+        };
 
         {
             let socket = socket.clone();
@@ -135,7 +135,7 @@ impl Router {
         }
 
 
-        Ok(arc)
+        Ok((arc, task))
     }
 
     pub fn get_udp_socket(&self) -> Arc<UdpSocket>{
@@ -149,7 +149,7 @@ impl Router {
     }
 
     // returns Some(()) i
-    pub(crate) async fn add_socket(&self, socket: Arc<SocketImpl>) -> Result<(), Error>{
+    pub(crate) async fn add_socket(&self, socket: Arc<SocketData>) -> Result<(), Error>{
         let mut endpoints = self.endpoints.write().await;
 
         let idx = socket.get_virual_port().get_port_number() as usize;

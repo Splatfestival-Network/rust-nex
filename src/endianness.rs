@@ -3,6 +3,7 @@ use std::io::Read;
 use std::marker::PhantomData;
 use std::pin::Pin;
 use bytemuck::Pod;
+use tokio::io::{AsyncRead, AsyncReadExt};
 
 #[cfg(target_endian = "little")]
 pub const IS_LITTLE_ENDIAN: bool = true;
@@ -128,6 +129,8 @@ impl<T: Read> ReadExtensions for T{
         })
     }
 }
+
+
 
 
 pub trait SwapEndian: Clone + Copy{

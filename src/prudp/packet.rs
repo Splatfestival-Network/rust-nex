@@ -36,7 +36,7 @@ pub enum Error {
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[repr(transparent)]
-#[derive(Copy, Clone, Pod, Zeroable, SwapEndian)]
+#[derive(Copy, Clone, Pod, Zeroable, SwapEndian, Default)]
 pub struct TypesFlags(u16);
 
 impl TypesFlags {
@@ -77,6 +77,10 @@ pub mod types {
     pub const SYN: u8 = 0x0;
     pub const CONNECT: u8 = 0x1;
     pub const DATA: u8 = 0x2;
+    pub const DISCONNECT: u8 = 0x3;
+    pub const PING: u8 = 0x4;
+    /// no idea what user is supposed to mean
+    pub const USER: u8 = 0x5;
 }
 
 impl Debug for TypesFlags {
@@ -135,8 +139,8 @@ impl Debug for VirtualPort {
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Pod, Zeroable, SwapEndian)]
 pub struct PRUDPHeader {
-    magic: [u8; 2],
-    version: u8,
+    pub magic: [u8; 2],
+    pub version: u8,
     pub packet_specific_size: u8,
     pub payload_size: u16,
     pub source_port: VirtualPort,
@@ -146,6 +150,24 @@ pub struct PRUDPHeader {
     pub substream_id: u8,
     pub sequence_id: u16,
 }
+
+impl Default for PRUDPHeader{
+    fn default() -> Self {
+        Self{
+            magic: [0xEA, 0xD0],
+            version: 1,
+            session_id: 0,
+            source_port: VirtualPort(0),
+            sequence_id: 0,
+            payload_size: 0,
+            destination_port: VirtualPort(0),
+            types_and_flags: TypesFlags(0),
+            packet_specific_size: 0,
+            substream_id: 0
+        }
+    }
+}
+
 #[repr(u16)]
 #[derive(EnumTryInto)]
 enum PacketSpecificData {
@@ -414,7 +436,7 @@ impl PRUDPPacket {
         self.header.payload_size = self.payload.len() as u16;
     }
 
-    pub fn base_response_packet(&self) -> Self {
+    pub fn  base_response_packet(&self) -> Self {
         Self {
             header: PRUDPHeader {
                 magic: [0xEA, 0xD0],
