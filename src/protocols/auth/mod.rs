@@ -11,7 +11,7 @@ use crate::rmc::response::{ErrorCode, RMCResponse, RMCResponseResult};
 
 
 define_protocol!{
-    10<'a>(account: &'a Account) => {
+    10(secure_server_account: &'static Account) => {
         0x01 => login_raw_params,
         0x02 => login_ex_raw_params
     }

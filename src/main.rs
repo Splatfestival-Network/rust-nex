@@ -26,6 +26,7 @@ pub mod rmc;
 mod protocols;
 
 mod nex;
+mod grpc;
 
 static KERBEROS_SERVER_PASSWORD: Lazy<String> = Lazy::new(||{
     env::var("AUTH_SERVER_PORT")
@@ -96,11 +97,11 @@ async fn start_servers(){
                     async move {
                         let rc4: Rc4<U5> = Rc4::new_from_slice( "CD&ML".as_bytes()).unwrap();
                         let cypher = Box::new(rc4);
-                        let server_cypher: Box<dyn StreamCipher + Send + Sync> = cypher;
+                        let server_cypher: Box<dyn StreamCipher + Send> = cypher;
 
                         let rc4: Rc4<U5> = Rc4::new_from_slice( "CD&ML".as_bytes()).unwrap();
                         let cypher = Box::new(rc4);
-                        let client_cypher: Box<dyn StreamCipher + Send + Sync> = cypher;
+                        let client_cypher: Box<dyn StreamCipher + Send> = cypher;
 
                         (true, (server_cypher, client_cypher))
                     }

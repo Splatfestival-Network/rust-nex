@@ -1,4 +1,6 @@
+use std::future::Future;
 use std::io::Cursor;
+use std::pin::Pin;
 use std::sync::Arc;
 use log::error;
 use crate::prudp::packet::PRUDPPacket;
@@ -7,7 +9,7 @@ use crate::rmc::message::RMCMessage;
 use crate::rmc::response::{RMCResponse, RMCResponseResult, send_response};
 use crate::rmc::response::ErrorCode::Core_NotImplemented;
 
-type ContainedProtocolList = Box<[Box<dyn Fn(&RMCMessage) -> Option<RMCResponse> + Send + Sync>]>;
+type ContainedProtocolList = Box<[Box<dyn for<'a> Fn(&'a RMCMessage) -> Pin<Box<dyn Future<Output = Option<RMCResponse>> + Send + 'a>> + Send + Sync>]>;
 
 pub struct RMCProtocolServer(ContainedProtocolList);
 
@@ -25,7 +27,7 @@ impl RMCProtocolServer{
         println!("recieved rmc message: {{ protocol: {}, method: {}}}", rmc.protocol_id, rmc.method_id);
 
         for proto in &self.0 {
-            if let Some(response) = proto(&rmc) {
+            if let Some(response) = proto(&rmc).await {
                 send_response(&packet, &socket, connection, response).await;
                 return;
             }
