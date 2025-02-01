@@ -10,6 +10,7 @@ use once_cell::sync::Lazy;
 use rc4::{KeyInit, Rc4, StreamCipher};
 use rc4::consts::U5;
 use simplelog::{ColorChoice, CombinedLogger, Config, LevelFilter, TerminalMode, TermLogger, WriteLogger};
+use crate::nex::account::Account;
 use crate::protocols::auth;
 use crate::protocols::server::RMCProtocolServer;
 use crate::prudp::socket::{Socket, SocketData};
@@ -23,6 +24,18 @@ mod endianness;
 mod prudp;
 pub mod rmc;
 mod protocols;
+
+mod nex;
+
+static KERBEROS_SERVER_PASSWORD: Lazy<String> = Lazy::new(||{
+    env::var("AUTH_SERVER_PORT")
+        .ok()
+        .unwrap_or("password".to_owned())
+});
+
+
+static AUTH_SERVER_ACCOUNT: Lazy<Account> = Lazy::new(|| Account::new(1, "Quazal Authentication", &KERBEROS_SERVER_PASSWORD));
+static SECURE_SERVER_ACCOUNT: Lazy<Account> = Lazy::new(|| Account::new(2, "Quazal Rendez-Vous", &KERBEROS_SERVER_PASSWORD));
 
 static AUTH_SERVER_PORT: Lazy<u16> = Lazy::new(||{
     env::var("AUTH_SERVER_PORT")
@@ -70,7 +83,7 @@ async fn start_servers(){
 
     // dont assign it to the name _ as that will make it drop right here and now
     let rmcserver = RMCProtocolServer::new(Box::new([
-        Box::new(auth::protocol)
+        Box::new(auth::bound_protocol(&SECURE_SERVER_ACCOUNT))
     ]));
 
     let mut _socket =

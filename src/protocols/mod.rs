@@ -2,8 +2,8 @@ pub mod auth;
 pub mod server;
 #[macro_export]
 macro_rules! define_protocol {
-    ($id:literal => {$($func_id:literal => $func:path),*} ) => {
-        pub fn protocol(rmcmessage: &RMCMessage) -> Option<RMCResponse>{
+    ($id:literal $( <$lifetime:lifetime> )?($($varname:ident : $ty:ty),*) => {$($func_id:literal => $func:path),*} ) => {
+        fn protocol $( <$lifetime> )? (rmcmessage: &RMCMessage, $($varname : $ty,)*) -> Option<RMCResponse>{
             if rmcmessage.protocol_id != $id{
                 return None;
             }
@@ -22,6 +22,17 @@ macro_rules! define_protocol {
                 protocol_id: $id,
                 response_result
             })
+        }
+
+        pub fn bound_protocol$(<$lifetime>)?($($varname : $ty,)*) -> Box<dyn Fn(&RMCMessage) -> Option<RMCResponse> + Send + Sync $( + $lifetime)?>{
+            Box::new(
+                move |v| {
+                    $(
+                    let $varname = $varname.clone();
+                    )*
+                    protocol(v, $($varname,)*)
+                }
+            )
         }
     };
 }
