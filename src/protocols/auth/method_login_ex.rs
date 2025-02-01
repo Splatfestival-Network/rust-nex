@@ -1,5 +1,6 @@
 use std::io::Cursor;
 use log::{error, info};
+use crate::nex::account::Account;
 use crate::rmc::message::RMCMessage;
 use crate::rmc::response::{ErrorCode, RMCResponse, RMCResponseResult};
 use crate::rmc::structures::{string, any, RmcSerialize};
@@ -8,10 +9,12 @@ use crate::rmc::structures::any::Any;
 pub fn login_ex(rmcmessage: &RMCMessage, name: &str) -> RMCResponseResult{
     // todo: figure out how the AuthenticationInfo struct works, parse it and validate login info
 
+
+
     return rmcmessage.error_result_with_code(ErrorCode::Core_InvalidArgument);
 }
 
-pub fn login_ex_raw_params(rmcmessage: &RMCMessage) -> RMCResponseResult{
+pub fn login_ex_raw_params(rmcmessage: &RMCMessage, account: &Account) -> RMCResponseResult{
     let mut reader = Cursor::new(&rmcmessage.rest_of_data);
 
     let Ok(str) =  String::deserialize(&mut reader) else {
