@@ -1,30 +1,19 @@
-use std::array;
 use std::collections::{HashMap, VecDeque};
 use std::future::Future;
-use std::io::Write;
 use std::ops::Deref;
 use std::pin::Pin;
 use tokio::net::UdpSocket;
 use std::sync::{Arc};
 use tokio::sync::{Mutex, MutexGuard, RwLock};
-use hmac::{Hmac, Mac};
 use log::{error, info, trace, warn};
 use rand::random;
-use rc4::consts::{U256, U5};
-use rc4::{Rc4, Rc4Core, StreamCipher};
-use rc4::cipher::{KeySizeUser, StreamCipherCoreWrapper};
-use rustls::internal::msgs::handshake::SessionId;
-use tokio::io::AsyncWriteExt;
-use tokio::sync::mpsc::{channel, Receiver, Sender};
-use tokio::task::JoinHandle;
-use tokio_stream::wrappers::ReceiverStream;
-use crate::prudp::packet::{flags, PacketOption, PRUDPPacket, types, VirtualPort};
+use rc4::StreamCipher;
+use crate::prudp::packet::{PacketOption, PRUDPPacket, VirtualPort};
 use crate::prudp::packet::flags::{ACK, HAS_SIZE, MULTI_ACK, NEED_ACK, RELIABLE};
 use crate::prudp::packet::PacketOption::{ConnectionSignature, MaximumSubstreamId, SupportedFunctions};
 use crate::prudp::packet::types::{CONNECT, DATA, PING, SYN};
 use crate::prudp::router::{Error, Router};
 use crate::prudp::sockaddr::PRUDPSockAddr;
-use rc4::KeyInit;
 
 
 // due to the way this is designed crashing the router thread causes deadlock, sorry ;-;
@@ -53,7 +42,6 @@ pub struct ActiveConnectionData {
     pub reliable_client_counter: u16,
     pub reliable_server_counter: u16,
     pub reliable_client_queue: VecDeque<PRUDPPacket>,
-    pub connection_data_channel: Sender<Vec<u8>>,
     server_encryption: Box<dyn StreamCipher + Send + Sync>,
     client_decryption: Box<dyn StreamCipher + Send + Sync>,
     pub server_session_id: u8,
@@ -237,7 +225,7 @@ impl SocketData {
 
                 response_packet.options.push(ConnectionSignature(Default::default()));
 
-                let mut init_seq_id = 0;
+                //let mut init_seq_id = 0;
 
                 for option in &packet.options {
                     match option {
@@ -246,8 +234,8 @@ impl SocketData {
                         ConnectionSignature(sig) => {
                             connection.server_signature = *sig
                         }
-                        PacketOption::InitialSequenceId(id) => {
-                            init_seq_id = *id;
+                        PacketOption::InitialSequenceId(_id) => {
+                            //init_seq_id = *id;
                         }
                         _ => { /* ? */ }
                     }
@@ -272,8 +260,6 @@ impl SocketData {
 
                 self.socket.send_to(&vec, client_address.regular_socket_addr).await.expect("failed to send data back");
 
-                let (send, recv) = channel(100);
-
                 let (accepted, (client_decryption, server_encryption))
                     = (self.on_connect_handler)(packet.clone()).await;
 
@@ -283,7 +269,6 @@ impl SocketData {
                 }
 
                 connection.active_connection_data = Some(ActiveConnectionData {
-                    connection_data_channel: send,
                     client_decryption,
                     server_encryption,
                     reliable_client_queue: VecDeque::new(),
@@ -328,7 +313,7 @@ impl SocketData {
                             .then(|| a.reliable_client_queue.pop_front())).flatten().flatten()
                     } {
                         if packet.options.iter().any(|v| match v{
-                            PacketOption::FragmentId(f) => (*f != 0),
+                            PacketOption::FragmentId(f) => *f != 0,
                             _ => false,
                         }){
                             error!("fragmented packets are unsupported right now")

@@ -1,13 +1,9 @@
 use std::io;
-use std::io::{Cursor, Write};
+use std::io::{Write};
 use std::mem::transmute;
-use tokio::sync::Mutex;
 use bytemuck::bytes_of;
-use hmac::digest::consts::U5;
-use hmac::digest::KeyInit;
-use rc4::{Rc4, StreamCipher};
-use crate::prudp::packet::{PRUDPHeader, PRUDPPacket, TypesFlags};
-use crate::prudp::packet::flags::{HAS_SIZE, NEED_ACK, RELIABLE};
+use crate::prudp::packet::{PRUDPPacket};
+use crate::prudp::packet::flags::{NEED_ACK, RELIABLE};
 use crate::prudp::packet::PacketOption::FragmentId;
 use crate::prudp::packet::types::DATA;
 use crate::prudp::socket::{ConnectionData, SocketData};

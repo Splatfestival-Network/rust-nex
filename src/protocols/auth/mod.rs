@@ -1,10 +1,10 @@
 mod method_login_ex;
 
-use log::{error, info};
+use log::{error};
 use crate::define_protocol;
-use crate::protocols::auth::method_login_ex::{login_ex, login_ex_raw_params};
+use crate::protocols::auth::method_login_ex::{ login_ex_raw_params};
 use crate::rmc::message::RMCMessage;
-use crate::rmc::response::{ErrorCode, RMCResponse, RMCResponseResult};
+use crate::rmc::response::{ErrorCode, RMCResponse};
 
 
 define_protocol!{

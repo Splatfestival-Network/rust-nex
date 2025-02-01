@@ -1,7 +1,11 @@
+// no clue why this produces a warning where `#[repr(u16)]` is below,
+// the thing is says to do also breaks the code, so we just
+// force the compiler to shut up here
+#![allow(unused_parens)]
+
 use std::fmt::{Debug, Formatter};
-use std::hint::unreachable_unchecked;
 use std::io;
-use std::io::{Cursor, ErrorKind, Read, Seek, Write};
+use std::io::{Cursor, Read, Seek, Write};
 use std::net::SocketAddrV4;
 use bytemuck::{Pod, Zeroable};
 use hmac::{Hmac, Mac};
@@ -9,7 +13,7 @@ use log::{error, trace, warn};
 use md5::{Md5, Digest};
 use thiserror::Error;
 use v_byte_macros::{EnumTryInto, SwapEndian};
-use crate::endianness::{IS_BIG_ENDIAN, IS_LITTLE_ENDIAN, ReadExtensions};
+use crate::endianness::{IS_BIG_ENDIAN, ReadExtensions};
 use crate::prudp::packet::flags::ACK;
 use crate::prudp::packet::PacketOption::{ConnectionSignature, FragmentId, InitialSequenceId, MaximumSubstreamId, SupportedFunctions};
 use crate::prudp::sockaddr::PRUDPSockAddr;
@@ -103,7 +107,7 @@ impl VirtualPort {
 
     #[inline]
     pub const fn get_port_number(self) -> u8 {
-        (self.0 & 0x0F)
+        self.0 & 0x0F
     }
 
     #[inline]
@@ -168,8 +172,10 @@ impl Default for PRUDPHeader{
     }
 }
 
-#[repr(u16)]
+
 #[derive(EnumTryInto)]
+
+#[repr(u16)]
 enum PacketSpecificData {
     E = 0x10
 }

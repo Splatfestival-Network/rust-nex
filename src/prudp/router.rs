@@ -1,24 +1,19 @@
-use std::{env, io, thread};
-use std::cell::OnceCell;
+use std::{env, io};
 use std::io::Cursor;
 use std::marker::PhantomData;
 use tokio::net::UdpSocket;
-use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
+use std::net::{SocketAddr, SocketAddrV4};
 use std::net::SocketAddr::V4;
-use std::ops::{Deref, DerefMut};
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::task::JoinHandle;
 use once_cell::sync::Lazy;
-use log::{error, info, trace, warn};
+use log::{error, info, trace};
 use thiserror::Error;
-use tokio::io::Join;
 use tokio::sync::RwLock;
-use crate::prudp::auth_module::AuthModule;
-use crate::prudp::socket::{Socket, SocketData};
+use crate::prudp::socket::SocketData;
 use crate::prudp::packet::{PRUDPPacket, VirtualPort};
 use crate::prudp::router::Error::VirtualPortTaken;
-use crate::prudp::sockaddr::PRUDPSockAddr;
 
 static SERVER_DATAGRAMS: Lazy<u8> = Lazy::new(||{
     env::var("SERVER_DATAGRAM_COUNT").ok()
@@ -41,10 +36,10 @@ pub enum Error{
 
 
 impl Router {
-    fn process_prudp_packet(&self, packet: &PRUDPPacket){
+    fn process_prudp_packet(&self, _packet: &PRUDPPacket){
 
     }
-    async fn process_prudp_packets<'a>(self: Arc<Self>, socket: Arc<UdpSocket>, addr: SocketAddrV4, udp_message: Vec<u8>){
+    async fn process_prudp_packets<'a>(self: Arc<Self>, _socket: Arc<UdpSocket>, addr: SocketAddrV4, udp_message: Vec<u8>){
         let mut stream = Cursor::new(&udp_message);
 
         while stream.position() as usize != udp_message.len() {
@@ -124,8 +119,8 @@ impl Router {
         };
 
         {
-            let socket = socket.clone();
-            let server= arc.clone();
+            let _socket = socket.clone();
+            let _server = arc.clone();
 
             tokio::spawn(async {
                 //server thread sender entry

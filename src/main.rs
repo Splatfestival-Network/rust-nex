@@ -1,23 +1,20 @@
-use std::env::current_dir;
-use std::{env, fs};
+#![allow(dead_code)]
 
+use std::{env, fs};
 use std::fs::File;
-use std::io::Cursor;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use chrono::Local;
-use log::{error, info, trace};
+use log::info;
 use once_cell::sync::Lazy;
 use rc4::{KeyInit, Rc4, StreamCipher};
 use rc4::consts::U5;
 use simplelog::{ColorChoice, CombinedLogger, Config, LevelFilter, TerminalMode, TermLogger, WriteLogger};
 use crate::protocols::auth;
 use crate::protocols::server::RMCProtocolServer;
-use crate::prudp::socket::{Socket, SocketData};
+use crate::prudp::socket::Socket;
 use crate::prudp::packet::{PRUDPPacket, VirtualPort};
 use crate::prudp::router::Router;
 use crate::rmc::message::RMCMessage;
-use crate::rmc::response::{RMCResponse, RMCResponseResult, send_response};
-use crate::rmc::response::ErrorCode::{Core_InvalidIndex, Core_NotImplemented};
 
 mod endianness;
 mod prudp;
@@ -55,7 +52,7 @@ async fn main() {
     start_servers().await;
 }
 
-async fn auth_server_handle_rmc(packet: PRUDPPacket, rmc_message: RMCMessage){
+async fn auth_server_handle_rmc(_packet: PRUDPPacket, _rmc_message: RMCMessage){
 
 }
 

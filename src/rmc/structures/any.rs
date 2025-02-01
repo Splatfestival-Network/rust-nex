@@ -1,6 +1,6 @@
-use std::io::{Read, Seek, Write};
+use std::io::{Read, Write};
 use crate::endianness::{IS_BIG_ENDIAN, ReadExtensions};
-use super::{string, Result, RmcSerialize};
+use super::{Result, RmcSerialize};
 
 #[derive(Debug)]
 pub struct Any{
@@ -9,14 +9,14 @@ pub struct Any{
 }
 
 impl RmcSerialize for Any{
-    fn serialize(&self, writer: &mut dyn Write) -> Result<()> {
+    fn serialize(&self, _writer: &mut dyn Write) -> Result<()> {
         todo!()
     }
     fn deserialize(mut reader: &mut dyn Read) -> Result<Self> {
         let name = String::deserialize(reader)?;
 
         // also length ?
-        let len2: u32 = reader.read_struct(IS_BIG_ENDIAN)?;
+        let _len2: u32 = reader.read_struct(IS_BIG_ENDIAN)?;
         let length: u32 = reader.read_struct(IS_BIG_ENDIAN)?;
 
         let mut data = vec![0; length as usize];

@@ -1,5 +1,4 @@
-use std::ffi::CString;
-use std::io::{Read, Seek, Write};
+use std::io::{Read, Write};
 use bytemuck::bytes_of;
 use log::error;
 use crate::endianness::{IS_BIG_ENDIAN, ReadExtensions};

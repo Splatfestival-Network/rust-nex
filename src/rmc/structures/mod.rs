@@ -1,8 +1,6 @@
 use std::io;
-use std::io::{Read, Seek, Write};
-use std::str::Utf8Error;
+use std::io::{Read, Write};
 use std::string::FromUtf8Error;
-use md5::digest::impl_oid_carrier;
 use thiserror::Error;
 
 //ideas for the future: make a proc macro library which allows generation of struct reads

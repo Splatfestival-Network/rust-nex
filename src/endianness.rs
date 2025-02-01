@@ -1,9 +1,7 @@
 use std::io;
 use std::io::Read;
 use std::marker::PhantomData;
-use std::pin::Pin;
 use bytemuck::Pod;
-use tokio::io::{AsyncRead, AsyncReadExt};
 
 #[cfg(target_endian = "little")]
 pub const IS_LITTLE_ENDIAN: bool = true;
@@ -212,7 +210,7 @@ impl<T: SwapEndian, U: SwapEndian, V: SwapEndian, W: SwapEndian> SwapEndian for 
     }
 }
 
-impl<T: SwapEndian, const size: usize> SwapEndian for [T; size]{
+impl<T: SwapEndian, const SIZE: usize> SwapEndian for [T; SIZE]{
     #[inline]
     fn swap_endian(mut self) -> Self {
         for elem in &mut self{
