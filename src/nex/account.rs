@@ -6,7 +6,7 @@ struct Account{
 }
 
 impl Account{
-    fn new(pid: u32, passwd: &str) -> Self{
+    const fn new(pid: u32, passwd: &str) -> Self{
         Self{
             kerbros_password: passwd.into(),
             pid
