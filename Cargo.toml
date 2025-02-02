@@ -22,6 +22,7 @@ tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread", "net", "s
 tokio-stream = { version =  "0.1.17", features = ["io-util"] }
 tonic = "0.12.3"
 prost = "0.13.4"
+hex = "0.4.3"
 
 [build-dependencies]
 tonic-build = "0.12.3"

@@ -18,6 +18,15 @@ impl RmcSerialize for String{
         Ok(String::from_utf8(data)?)
     }
     fn serialize(&self, writer: &mut dyn Write) -> Result<()> {
+        (&self[..]).serialize(writer)
+    }
+}
+
+impl RmcSerialize for &str{
+    fn deserialize(mut reader: &mut dyn Read) -> Result<Self> {
+        panic!("cannot serialize to &str")
+    }
+    fn serialize(&self, writer: &mut dyn Write) -> Result<()> {
         let u16_len: u16 = self.len() as u16;
         writer.write(bytes_of(&u16_len))?;
 

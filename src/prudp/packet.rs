@@ -12,7 +12,7 @@ use hmac::{Hmac, Mac};
 use log::{error, trace, warn};
 use md5::{Md5, Digest};
 use thiserror::Error;
-use v_byte_macros::{EnumTryInto, SwapEndian};
+use v_byte_macros::{SwapEndian};
 use crate::endianness::{IS_BIG_ENDIAN, ReadExtensions};
 use crate::prudp::packet::flags::ACK;
 use crate::prudp::packet::PacketOption::{ConnectionSignature, FragmentId, InitialSequenceId, MaximumSubstreamId, SupportedFunctions};
@@ -172,13 +172,6 @@ impl Default for PRUDPHeader{
     }
 }
 
-
-#[derive(EnumTryInto)]
-
-#[repr(u16)]
-enum PacketSpecificData {
-    E = 0x10
-}
 
 #[derive(Debug, Clone)]
 pub enum PacketOption{

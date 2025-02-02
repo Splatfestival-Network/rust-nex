@@ -1,14 +1,13 @@
 use std::{env, result};
-use std::net::{Ipv4Addr, SocketAddrV4};
+use std::array::TryFromSliceError;
+use std::net::{Ipv4Addr};
 use once_cell::sync::Lazy;
 use thiserror::Error;
-use tonic::codegen::http::uri::InvalidUri;
 use tonic::metadata::{Ascii, MetadataValue};
-use tonic::{Request, Status, transport};
+use tonic::{Request, transport};
 use tonic::codegen::InterceptedService;
-use tonic::service::Interceptor;
 use tonic::transport::Channel;
-use crate::grpc::{InterceptorFunc, protobufs};
+use crate::grpc::InterceptorFunc;
 use crate::grpc::protobufs::account::account_client::AccountClient;
 use crate::grpc::protobufs::account::GetNexPasswordRequest;
 
@@ -42,7 +41,9 @@ pub enum Error{
     #[error(transparent)]
     Transport(#[from] transport::Error),
     #[error(transparent)]
-    Status(#[from] tonic::Status)
+    Status(#[from] tonic::Status),
+    #[error("invalid password size: {0}")]
+    PasswordConversion(#[from] TryFromSliceError)
 }
 
 pub type Result<T> = result::Result<T, Error>;
@@ -64,14 +65,14 @@ impl Client{
         Ok(Self(client))
     }
 
-    pub async fn get_nex_password(&mut self , pid: u32) -> Result<Box<str>>{
+    pub async fn get_nex_password(&mut self , pid: u32) -> Result<[u8; 16]>{
         let req = Request::new(GetNexPasswordRequest{
             pid
         });
 
         let response = self.0.get_nex_password(req).await?.into_inner();
 
-        Ok(response.password.into_boxed_str())
+        Ok(response.password.as_bytes().try_into()?)
     }
 }
 

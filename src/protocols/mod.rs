@@ -3,6 +3,7 @@ pub mod server;
 #[macro_export]
 macro_rules! define_protocol {
     ($id:literal ($($varname:ident : $ty:ty),*) => {$($func_id:literal => $func:path),*} ) => {
+        #[allow(unused_parens)]
         async fn protocol (rmcmessage: &RMCMessage, $($varname : $ty),*) -> Option<RMCResponse>{
             if rmcmessage.protocol_id != $id{
                 return None;
@@ -30,7 +31,7 @@ macro_rules! define_protocol {
                 response_result
             })
         }
-
+        #[allow(unused_parens)]
         pub fn bound_protocol($($varname : $ty,)*) -> Box<dyn for<'message_lifetime> Fn(&'message_lifetime RMCMessage) -> ::std::pin::Pin<Box<dyn ::std::future::Future<Output = Option<RMCResponse>> + Send + 'message_lifetime>> + Send + Sync>{
             Box::new(
                 move |v| {

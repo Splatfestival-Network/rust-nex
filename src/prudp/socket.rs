@@ -42,7 +42,6 @@ pub struct ActiveConnectionData {
     pub reliable_client_counter: u16,
     pub reliable_server_counter: u16,
     pub reliable_client_queue: VecDeque<PRUDPPacket>,
-    pub connection_data_channel: Sender<Vec<u8>>,
     server_encryption: Box<dyn StreamCipher + Send>,
     client_decryption: Box<dyn StreamCipher + Send>,
     pub server_session_id: u8,
@@ -363,7 +362,7 @@ impl SocketData {
                     self.socket.send_to(&vec, client_address.regular_socket_addr).await.expect("failed to send data back");
                 }
             }
-
+            3 => {}
             _ => unimplemented!("unimplemented packet type: {}", packet.header.types_and_flags.get_types())
         }
     }

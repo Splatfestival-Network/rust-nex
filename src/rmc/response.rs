@@ -8,6 +8,8 @@ use crate::prudp::packet::PacketOption::FragmentId;
 use crate::prudp::packet::types::DATA;
 use crate::prudp::socket::{ConnectionData, SocketData};
 
+
+
 pub enum RMCResponseResult {
     Success{
         call_id: u32,
@@ -389,6 +391,7 @@ mod test{
     use hmac::digest::consts::U5;
     use hmac::digest::KeyInit;
     use rc4::{Rc4, StreamCipher};
+    use crate::rmc::response::ErrorCode;
 
     #[test]
     fn test(){
@@ -409,5 +412,11 @@ mod test{
 
         assert_eq!(data_orig, data);
 
+    }
+
+    #[test]
+    fn test_enum_equivilance(){
+        let val: u32 = ErrorCode::Core_Unknown.into();
+        assert_eq!(val, 0x00010001)
     }
 }

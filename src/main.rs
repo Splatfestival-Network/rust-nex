@@ -11,6 +11,7 @@ use rc4::consts::U5;
 use simplelog::{ColorChoice, CombinedLogger, Config, LevelFilter, TerminalMode, TermLogger, WriteLogger};
 use crate::nex::account::Account;
 use crate::protocols::auth;
+use crate::protocols::auth::AuthProtocolConfig;
 use crate::protocols::server::RMCProtocolServer;
 use crate::prudp::socket::Socket;
 use crate::prudp::packet::{PRUDPPacket, VirtualPort};
@@ -24,9 +25,10 @@ mod protocols;
 
 mod nex;
 mod grpc;
+mod kerberos;
 
 static KERBEROS_SERVER_PASSWORD: Lazy<String> = Lazy::new(||{
-    env::var("AUTH_SERVER_PORT")
+    env::var("AUTH_SERVER_PASSWORD")
         .ok()
         .unwrap_or("password".to_owned())
 });
@@ -80,8 +82,15 @@ async fn start_servers(){
     info!("setting up endpoints");
 
     // dont assign it to the name _ as that will make it drop right here and now
+
+    let auth_protocol_config = AuthProtocolConfig{
+        secure_server_account: &SECURE_SERVER_ACCOUNT,
+        build_name: "branch:origin/project/wup-agmj build:3_8_15_2004_0",
+        station_url: "prudps:/PID=2;sid=1;stream=10;type=2;address=31.220.75.208;port=10001;CID=1"
+    };
+
     let rmcserver = RMCProtocolServer::new(Box::new([
-        Box::new(auth::bound_protocol(&SECURE_SERVER_ACCOUNT))
+        Box::new(auth::bound_protocol(auth_protocol_config))
     ]));
 
     let mut _socket =

@@ -17,6 +17,11 @@ type Result<T> = std::result::Result<T, Error>;
 
 pub mod string;
 pub mod any;
+pub mod qresult;
+pub mod buffer;
+pub mod connection_data;
+pub mod rmc_struct;
+pub mod list;
 
 pub trait RmcSerialize: Sized{
     fn serialize(&self, writer: &mut dyn Write) -> Result<()>;

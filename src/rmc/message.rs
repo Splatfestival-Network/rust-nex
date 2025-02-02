@@ -58,4 +58,12 @@ impl RMCMessage{
             error_code
         }
     }
+
+    pub fn success_with_data(&self, data: Vec<u8>) -> RMCResponseResult{
+        RMCResponseResult::Success {
+            call_id: self.call_id,
+            method_id: self.method_id,
+            data
+        }
+    }
 }
