@@ -26,8 +26,8 @@ pub struct Socket {
 }
 
 
-type OnConnectHandlerFn = Box<dyn Fn(PRUDPPacket) -> Pin<Box<dyn Future<Output=(bool, (Box<dyn StreamCipher + Send + Sync>, Box<dyn StreamCipher + Send + Sync>))> + Send + Sync>> + Send + Sync>;
-type OnDataHandlerFn = Box<dyn for<'a> Fn(PRUDPPacket, Arc<SocketData>, &'a mut MutexGuard<'_, ConnectionData>) -> Pin<Box<dyn Future<Output=()> + 'a + Send + Sync>> + Send + Sync>;
+type OnConnectHandlerFn = Box<dyn Fn(PRUDPPacket) -> Pin<Box<dyn Future<Output=(bool, (Box<dyn StreamCipher + Send>, Box<dyn StreamCipher + Send>))> + Send>> + Send + Sync>;
+type OnDataHandlerFn = Box<dyn for<'a> Fn(PRUDPPacket, Arc<SocketData>, &'a mut MutexGuard<'_, ConnectionData>) -> Pin<Box<dyn Future<Output=()> + 'a + Send>> + Send + Sync>;
 
 pub struct SocketData {
     virtual_port: VirtualPort,
@@ -42,8 +42,9 @@ pub struct ActiveConnectionData {
     pub reliable_client_counter: u16,
     pub reliable_server_counter: u16,
     pub reliable_client_queue: VecDeque<PRUDPPacket>,
-    server_encryption: Box<dyn StreamCipher + Send + Sync>,
-    client_decryption: Box<dyn StreamCipher + Send + Sync>,
+    pub connection_data_channel: Sender<Vec<u8>>,
+    server_encryption: Box<dyn StreamCipher + Send>,
+    client_decryption: Box<dyn StreamCipher + Send>,
     pub server_session_id: u8,
 }
 
