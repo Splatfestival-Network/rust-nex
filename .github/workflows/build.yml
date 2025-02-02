@@ -14,9 +14,10 @@ jobs:
   build:
     runs-on: self-hosted
     steps:
-    - name: Checkout Repository
+    - name: Checkout Repository And Submodules
       uses: actions/checkout@v4
-
+      with:
+        submodules: recursive
     - name: Setup Rust
       run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -q -y
       
