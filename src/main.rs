@@ -15,7 +15,7 @@ use crate::nex::account::Account;
 use crate::protocols::auth;
 use crate::protocols::auth::AuthProtocolConfig;
 use crate::protocols::server::RMCProtocolServer;
-use crate::prudp::socket::Socket;
+use crate::prudp::socket::{EncryptionPair, Socket};
 use crate::prudp::packet::{PRUDPPacket, VirtualPort};
 use crate::prudp::router::Router;
 use crate::rmc::message::RMCMessage;
@@ -112,18 +112,27 @@ async fn start_auth_server() -> AuthServer{
             router.clone(),
             VirtualPort::new(1,10),
             "6f599f81",
-            Box::new(|_|{
+            Box::new(|_, count|{
                 Box::pin(
                     async move {
-                        let rc4: Rc4<U5> = Rc4::new_from_slice( "CD&ML".as_bytes()).unwrap();
-                        let cypher = Box::new(rc4);
-                        let server_cypher: Box<dyn StreamCipher + Send> = cypher;
 
-                        let rc4: Rc4<U5> = Rc4::new_from_slice( "CD&ML".as_bytes()).unwrap();
-                        let cypher = Box::new(rc4);
-                        let client_cypher: Box<dyn StreamCipher + Send> = cypher;
 
-                        Some((Vec::new(), (server_cypher, client_cypher), None))
+                        let encryption_pairs = Vec::from_iter((0..=count).map(|v| {
+                            let rc4: Rc4<U5> = Rc4::new_from_slice( "CD&ML".as_bytes()).unwrap();
+                            let cypher = Box::new(rc4);
+                            let server_cypher: Box<dyn StreamCipher + Send> = cypher;
+
+                            let rc4: Rc4<U5> = Rc4::new_from_slice( "CD&ML".as_bytes()).unwrap();
+                            let cypher = Box::new(rc4);
+                            let client_cypher: Box<dyn StreamCipher + Send> = cypher;
+
+                            EncryptionPair{
+                                recv: client_cypher,
+                                send: server_cypher
+                            }
+                        }));
+
+                        Some((Vec::new(), encryption_pairs, None))
                     }
                 )
             }),
@@ -162,18 +171,12 @@ async fn start_secure_server() -> SecureServer{
             router.clone(),
             VirtualPort::new(1,10),
             "6f599f81",
-            Box::new(|p|{
+            Box::new(|p, count|{
                 Box::pin(
                     async move {
-                        let rc4: Rc4<U5> = Rc4::new_from_slice( "CD&ML".as_bytes()).unwrap();
-                        let cypher = Box::new(rc4);
-                        let server_cypher: Box<dyn StreamCipher + Send> = cypher;
 
-                        let rc4: Rc4<U5> = Rc4::new_from_slice( "CD&ML".as_bytes()).unwrap();
-                        let cypher = Box::new(rc4);
-                        let client_cypher: Box<dyn StreamCipher + Send> = cypher;
 
-                        Some((Vec::new(), (server_cypher, client_cypher), None))
+                        Some((Vec::new(), Vec::new(), None))
                     }
                 )
             }),
