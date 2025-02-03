@@ -5,7 +5,7 @@ use crate::endianness::{IS_BIG_ENDIAN, ReadExtensions};
 use crate::rmc::response::ErrorCode;
 use crate::rmc::structures::{RmcSerialize, Result};
 
-const ERROR_MASK: u32 =  1 << 31;
+pub const ERROR_MASK: u32 =  1 << 31;
 
 #[derive(Pod, Zeroable, Copy, Clone, SwapEndian)]
 #[repr(transparent)]

@@ -7,8 +7,7 @@ use crate::prudp::packet::flags::{NEED_ACK, RELIABLE};
 use crate::prudp::packet::PacketOption::FragmentId;
 use crate::prudp::packet::types::DATA;
 use crate::prudp::socket::{ConnectionData, SocketData};
-
-
+use crate::rmc::structures::qresult::ERROR_MASK;
 
 pub enum RMCResponseResult {
     Success{
@@ -67,6 +66,7 @@ pub fn generate_response(protocol_id: u8, response: RMCResponseResult) -> io::Re
         } => {
             data_out.push(0);
             let error_code_val: u32 = error_code.into();
+            let error_code_val = error_code_val | ERROR_MASK;
             data_out.write_all(bytes_of(&error_code_val))?;
             data_out.write_all(bytes_of(&call_id))?;
         }
