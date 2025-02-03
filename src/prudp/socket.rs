@@ -11,7 +11,7 @@ use rc4::StreamCipher;
 use crate::prudp::packet::{PacketOption, PRUDPPacket, VirtualPort};
 use crate::prudp::packet::flags::{ACK, HAS_SIZE, MULTI_ACK, NEED_ACK, RELIABLE};
 use crate::prudp::packet::PacketOption::{ConnectionSignature, MaximumSubstreamId, SupportedFunctions};
-use crate::prudp::packet::types::{CONNECT, DATA, PING, SYN};
+use crate::prudp::packet::types::{CONNECT, DATA, DISCONNECT, PING, SYN};
 use crate::prudp::router::{Error, Router};
 use crate::prudp::sockaddr::PRUDPSockAddr;
 
@@ -26,8 +26,13 @@ pub struct Socket {
 }
 
 
-type OnConnectHandlerFn = Box<dyn Fn(PRUDPPacket) -> Pin<Box<dyn Future<Output=(bool, (Box<dyn StreamCipher + Send>, Box<dyn StreamCipher + Send>))> + Send>> + Send + Sync>;
+type OnConnectHandlerFn = Box<dyn Fn(PRUDPPacket) -> Pin<Box<dyn Future<Output=Option<(Vec<u8>, (Box<dyn StreamCipher + Send>, Box<dyn StreamCipher + Send>), Option<ActiveSecureConnectionData>)>> + Send>> + Send + Sync>;
 type OnDataHandlerFn = Box<dyn for<'a> Fn(PRUDPPacket, Arc<SocketData>, &'a mut MutexGuard<'_, ConnectionData>) -> Pin<Box<dyn Future<Output=()> + 'a + Send>> + Send + Sync>;
+
+pub struct ActiveSecureConnectionData {
+    pid: u32,
+    session_key: [u8; 32],
+}
 
 pub struct SocketData {
     virtual_port: VirtualPort,
@@ -45,6 +50,7 @@ pub struct ActiveConnectionData {
     server_encryption: Box<dyn StreamCipher + Send>,
     client_decryption: Box<dyn StreamCipher + Send>,
     pub server_session_id: u8,
+    pub active_secure_connection_data: Option<ActiveSecureConnectionData>
 }
 
 
@@ -212,6 +218,25 @@ impl SocketData {
             CONNECT => {
                 info!("got connect");
 
+                let Some((
+                             accepted,
+                             (client_decryption, server_encryption),
+                             active_secure_connection_data
+                         )) = (self.on_connect_handler)(packet.clone()).await else {
+                    error!("invalid connection request");
+                    return;
+                };
+
+                connection.active_connection_data = Some(ActiveConnectionData {
+                    client_decryption,
+                    server_encryption,
+                    reliable_client_queue: VecDeque::new(),
+                    reliable_client_counter: 2,
+                    reliable_server_counter: 1,
+                    server_session_id: packet.header.session_id,
+                    active_secure_connection_data
+                });
+
                 let mut response_packet = packet.base_response_packet();
 
                 response_packet.header.types_and_flags.set_types(CONNECT);
@@ -253,29 +278,21 @@ impl SocketData {
 
                 response_packet.set_sizes();
 
-                response_packet.calculate_and_assign_signature(self.access_key, None, Some(connection.server_signature));
+                let potential_session_key = connection
+                    .active_connection_data
+                    .as_ref()
+                    .unwrap().active_secure_connection_data
+                    .as_ref()
+                    .map(|s| s.session_key);
+
+                response_packet.calculate_and_assign_signature(self.access_key, potential_session_key, Some(connection.server_signature));
 
                 let mut vec = Vec::new();
                 response_packet.write_to(&mut vec).expect("somehow failed to convert backet to bytes");
 
                 self.socket.send_to(&vec, client_address.regular_socket_addr).await.expect("failed to send data back");
 
-                let (accepted, (client_decryption, server_encryption))
-                    = (self.on_connect_handler)(packet.clone()).await;
 
-                if !accepted {
-                    // rejected
-                    return;
-                }
-
-                connection.active_connection_data = Some(ActiveConnectionData {
-                    client_decryption,
-                    server_encryption,
-                    reliable_client_queue: VecDeque::new(),
-                    reliable_client_counter: 2,
-                    reliable_server_counter: 1,
-                    server_session_id: packet.header.session_id,
-                });
             }
             DATA => {
                 if (packet.header.types_and_flags.get_flags() & RELIABLE) != 0 {
@@ -362,7 +379,37 @@ impl SocketData {
                     self.socket.send_to(&vec, client_address.regular_socket_addr).await.expect("failed to send data back");
                 }
             }
-            3 => {}
+            DISCONNECT => {
+                let ConnectionData{
+                    server_signature,
+                    active_connection_data,
+                    ..
+                } = &*connection;
+
+                let Some(active_connection) = active_connection_data.as_ref() else {
+                    return;
+                };
+
+                let mut ack = packet.base_acknowledgement_packet();
+
+                ack.set_sizes();
+
+                let potential_session_key = active_connection_data
+                    .as_ref()
+                    .unwrap().active_secure_connection_data
+                    .as_ref()
+                    .map(|s| s.session_key);
+
+
+                ack.calculate_and_assign_signature(self.access_key, potential_session_key, Some(*server_signature));
+
+                let mut vec = Vec::new();
+                ack.write_to(&mut vec).expect("somehow failed to convert backet to bytes");
+
+                self.socket.send_to(&vec, client_address.regular_socket_addr).await.expect("failed to send data back");
+                self.socket.send_to(&vec, client_address.regular_socket_addr).await.expect("failed to send data back");
+                self.socket.send_to(&vec, client_address.regular_socket_addr).await.expect("failed to send data back");
+            }
             _ => unimplemented!("unimplemented packet type: {}", packet.header.types_and_flags.get_types())
         }
     }
@@ -370,6 +417,8 @@ impl SocketData {
 
 impl ConnectionData{
     pub async fn finish_and_send_packet_to(&mut self, socket: &SocketData, mut packet: PRUDPPacket){
+        println!("{}", hex::encode(&packet.payload));
+
         if (packet.header.types_and_flags.get_flags() & RELIABLE) != 0{
             let Some(active_connection) = self.active_connection_data.as_mut() else {
                 error!("tried to send a secure packet to an inactive connection");

@@ -15,6 +15,8 @@ use crate::rmc::structures::connection_data::ConnectionData;
 use crate::rmc::structures::qresult::QResult;
 
 pub async fn login_ex(rmcmessage: &RMCMessage, proto_data: AuthProtocolConfig, pid: u32) -> RMCResponseResult{
+    return rmcmessage.error_result_with_code(ErrorCode::Authentication_OutOfService);
+
     // todo: figure out how the AuthenticationInfo struct works, parse it and validate login info
 
     let Ok(mut client) = account::Client::new().await else {

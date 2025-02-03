@@ -3,12 +3,14 @@
 use std::{env, fs};
 use std::fs::File;
 use std::net::{Ipv4Addr, SocketAddrV4};
+use std::sync::Arc;
 use chrono::Local;
 use log::info;
 use once_cell::sync::Lazy;
 use rc4::{KeyInit, Rc4, StreamCipher};
 use rc4::consts::U5;
 use simplelog::{ColorChoice, CombinedLogger, Config, LevelFilter, TerminalMode, TermLogger, WriteLogger};
+use tokio::task::JoinHandle;
 use crate::nex::account::Account;
 use crate::protocols::auth;
 use crate::protocols::auth::AuthProtocolConfig;
@@ -43,6 +45,12 @@ static AUTH_SERVER_PORT: Lazy<u16> = Lazy::new(||{
         .and_then(|s| s.parse().ok())
         .unwrap_or(10000)
 });
+static SECURE_SERVER_PORT: Lazy<u16> = Lazy::new(||{
+    env::var("SECURE_SERVER_PORT")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(10001)
+});
 
 static OWN_IP: Lazy<Ipv4Addr> = Lazy::new(||{
     env::var("SERVER_IP")
@@ -50,6 +58,10 @@ static OWN_IP: Lazy<Ipv4Addr> = Lazy::new(||{
         .and_then(|s| s.parse().ok())
         .expect("no public ip specified")
 });
+
+static SECURE_STATION_URL: Lazy<String> = Lazy::new(||
+    format!("prudps:/PID=2;sid=1;stream=10;type=2;address={};port={};CID=1", *OWN_IP, *SECURE_SERVER_PORT)
+);
 
 #[tokio::main]
 async fn main() {
@@ -68,14 +80,16 @@ async fn main() {
     start_servers().await;
 }
 
-async fn auth_server_handle_rmc(_packet: PRUDPPacket, _rmc_message: RMCMessage){
-
+struct AuthServer{
+    router: Arc<Router>,
+    join_handle: JoinHandle<()>,
+    socket: Socket
 }
 
-async fn start_servers(){
+async fn start_auth_server() -> AuthServer{
     info!("starting auth server on {}:{}", *OWN_IP, *AUTH_SERVER_PORT);
 
-    let (auth_server_router, auth_router_join) =
+    let (router, join_handle) =
         Router::new(SocketAddrV4::new(*OWN_IP, *AUTH_SERVER_PORT)).await
             .expect("unable to startauth server");
 
@@ -86,16 +100,16 @@ async fn start_servers(){
     let auth_protocol_config = AuthProtocolConfig{
         secure_server_account: &SECURE_SERVER_ACCOUNT,
         build_name: "branch:origin/project/wup-agmj build:3_8_15_2004_0",
-        station_url: "prudps:/PID=2;sid=1;stream=10;type=2;address=31.220.75.208;port=10001;CID=1"
+        station_url: &SECURE_STATION_URL
     };
 
     let rmcserver = RMCProtocolServer::new(Box::new([
         Box::new(auth::bound_protocol(auth_protocol_config))
     ]));
 
-    let mut _socket =
+    let mut socket =
         Socket::new(
-            auth_server_router.clone(),
+            router.clone(),
             VirtualPort::new(1,10),
             "6f599f81",
             Box::new(|_|{
@@ -109,7 +123,7 @@ async fn start_servers(){
                         let cypher = Box::new(rc4);
                         let client_cypher: Box<dyn StreamCipher + Send> = cypher;
 
-                        (true, (server_cypher, client_cypher))
+                        Some((Vec::new(), (server_cypher, client_cypher), None))
                     }
                 )
             }),
@@ -119,7 +133,69 @@ async fn start_servers(){
             })
         ).await.expect("unable to create socket");
 
-    auth_router_join.await.expect("auth server crashed")
+    AuthServer{
+        join_handle,
+        router,
+        socket,
+    }
+}
+
+struct SecureServer{
+    router: Arc<Router>,
+    join_handle: JoinHandle<()>,
+    socket: Socket
+}
+
+async fn start_secure_server() -> SecureServer{
+    info!("starting secure server on {}:{}", *OWN_IP, *SECURE_SERVER_PORT);
+
+    let (router, join_handle) =
+        Router::new(SocketAddrV4::new(*OWN_IP, *SECURE_SERVER_PORT)).await
+            .expect("unable to startauth server");
+
+    info!("setting up endpoints");
+
+    let rmcserver = RMCProtocolServer::new(Box::new([]));
+
+    let mut socket =
+        Socket::new(
+            router.clone(),
+            VirtualPort::new(1,10),
+            "6f599f81",
+            Box::new(|p|{
+                Box::pin(
+                    async move {
+                        let rc4: Rc4<U5> = Rc4::new_from_slice( "CD&ML".as_bytes()).unwrap();
+                        let cypher = Box::new(rc4);
+                        let server_cypher: Box<dyn StreamCipher + Send> = cypher;
+
+                        let rc4: Rc4<U5> = Rc4::new_from_slice( "CD&ML".as_bytes()).unwrap();
+                        let cypher = Box::new(rc4);
+                        let client_cypher: Box<dyn StreamCipher + Send> = cypher;
+
+                        Some((Vec::new(), (server_cypher, client_cypher), None))
+                    }
+                )
+            }),
+            Box::new(move |packet, socket, connection|{
+                let rmcserver = rmcserver.clone();
+                Box::pin(async move { rmcserver.process_message(packet, &socket, connection).await; })
+            })
+        ).await.expect("unable to create socket");
+
+    SecureServer{
+        join_handle,
+        router,
+        socket,
+    }
+}
+
+async fn start_servers(){
+    let auth_server = start_auth_server().await;
+    let secure_server = start_secure_server().await;
+
+    auth_server.join_handle.await.expect("auth server crashed");
+    secure_server.join_handle.await.expect("auth server crashed");
 }
 
 
