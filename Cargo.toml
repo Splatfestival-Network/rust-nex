@@ -18,7 +18,7 @@ rand = "0.9.0-beta.3"
 rustls = "^0.23.21"
 hmac = "0.12.1"
 md-5 = "^0.10.6"
-tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread", "net", "sync"] }
+tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread", "net", "sync", "fs"] }
 tokio-stream = { version =  "0.1.17", features = ["io-util"] }
 tonic = "0.12.3"
 prost = "0.13.4"

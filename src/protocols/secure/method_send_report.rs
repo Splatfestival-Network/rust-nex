@@ -1,0 +1,35 @@
+use std::io::Cursor;
+use log::error;
+use crate::endianness::{IS_BIG_ENDIAN, ReadExtensions};
+use crate::protocols::secure::method_register::register;
+use crate::prudp::socket::ConnectionData;
+use crate::prudp::station_url::StationUrl;
+use crate::rmc::message::RMCMessage;
+use crate::rmc::response::{ErrorCode, RMCResponseResult};
+use crate::rmc::response::ErrorCode::Core_InvalidArgument;
+use crate::rmc::structures::qbuffer;
+
+pub async fn send_report(rmcmessage: &RMCMessage, report_id: u32, data: Vec<u8>) -> RMCResponseResult{
+    let result = tokio::fs::write(format!("./reports/{}", report_id), data).await;
+
+    match result{
+        Ok(_) => {},
+        Err(e) => error!("{}", e)
+    }
+
+    return rmcmessage.success_with_data(Vec::new());
+}
+
+pub async fn send_report_raw_params(rmcmessage: &RMCMessage, conn_data: &mut ConnectionData, _: ()) -> RMCResponseResult{
+    let mut reader = Cursor::new(&rmcmessage.rest_of_data);
+
+    let Ok(error_id) = reader.read_struct(IS_BIG_ENDIAN) else {
+        return rmcmessage.error_result_with_code(Core_InvalidArgument);
+    };
+
+    let Ok(data) = qbuffer::read(&mut reader) else {
+        return rmcmessage.error_result_with_code(Core_InvalidArgument);
+    };
+
+    send_report(rmcmessage, error_id, data).await
+}

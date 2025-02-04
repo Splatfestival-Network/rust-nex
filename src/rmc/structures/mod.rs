@@ -22,6 +22,7 @@ pub mod buffer;
 pub mod connection_data;
 pub mod rmc_struct;
 pub mod list;
+pub mod qbuffer;
 
 pub trait RmcSerialize: Sized{
     fn serialize(&self, writer: &mut dyn Write) -> Result<()>;
