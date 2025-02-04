@@ -3,6 +3,8 @@ use crate::prudp::socket::ConnectionData;
 pub mod auth;
 pub mod server;
 pub mod secure;
+pub mod matchmake_extension;
+pub mod matchmake_common;
 
 #[macro_export]
 macro_rules! define_protocol {
@@ -40,11 +42,17 @@ macro_rules! define_protocol {
             -> ::std::pin::Pin<Box<dyn ::std::future::Future<Output = Option<crate::rmc::response::RMCResponse>> + Send + 'message_lifetime>> + Send + Sync>{
             Box::new(
                 move |v, cd| {
-                    Box::pin(async move {
+                    Box::pin({
                         $(
                         let $varname = $varname.clone();
                         )*
-                        protocol(v, cd, $($varname,)*).await
+
+                        async move {
+                            $(
+                            let $varname = $varname.clone();
+                            )*
+                            protocol(v, cd, $($varname,)*).await
+                        }
                     })
                 }
             )

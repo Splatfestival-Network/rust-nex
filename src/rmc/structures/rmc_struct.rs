@@ -22,3 +22,4 @@ pub fn write_struct(mut writer: &mut dyn Write, version: u8, pred: impl Fn(&mut 
 
     Ok(())
 }
+

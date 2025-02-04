@@ -17,22 +17,6 @@ impl<'a> RmcSerialize for &'a [u8]{
     }
 }
 
-impl<'a> RmcSerialize for Vec<u8>{
-    fn serialize(&self, writer: &mut dyn Write) -> crate::rmc::structures::Result<()> {
-        (&self[..]).serialize(writer)
-    }
-
-    fn deserialize(mut reader: &mut dyn Read) -> crate::rmc::structures::Result<Self> {
-        let len: u32 = reader.read_struct(IS_BIG_ENDIAN)?;
-
-        let mut data = vec![0; len as usize];
-
-        reader.read_exact(&mut data)?;
-
-        Ok(data)
-    }
-}
-
 impl<'a> RmcSerialize for Box<[u8]>{
     fn serialize(&self, writer: &mut dyn Write) -> crate::rmc::structures::Result<()> {
         (&self[..]).serialize(writer)

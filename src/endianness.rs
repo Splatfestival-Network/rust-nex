@@ -1,4 +1,4 @@
-use std::io;
+use std::{io, mem};
 use std::io::Read;
 use std::marker::PhantomData;
 use bytemuck::Pod;
@@ -159,6 +159,14 @@ impl SwapEndian for u64{
     #[inline]
     fn swap_endian(self) -> Self {
         self.swap_bytes()
+    }
+}
+
+impl SwapEndian for f64{
+    #[inline]
+    fn swap_endian(self) -> Self {
+        //trust me this is safe
+        unsafe{ mem::transmute::<_, f64>(mem::transmute::<_, u64>(self).swap_bytes()) }
     }
 }
 
