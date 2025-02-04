@@ -1,6 +1,6 @@
 use std::io::{Read, Write};
 use bytemuck::{bytes_of, Pod, Zeroable};
-use chrono::{Datelike, Timelike};
+use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Timelike, Utc};
 use hmac::Hmac;
 use md5::{Digest, Md5};
 use rc4::{Rc4, Rc4Core, StreamCipher};
@@ -45,12 +45,47 @@ impl KerberosDateTime{
             now.year() as u64,
         )
     }
+
+    #[inline]
+    pub fn get_seconds(&self) -> u8{
+        (self.0 & 0b111111) as u8
+    }
+
+    #[inline]
+    pub fn get_minutes(&self) -> u8{
+        ((self.0 >> 6) & 0b111111) as u8
+    }
+    #[inline]
+    pub fn get_hours(&self) -> u8{
+        ((self.0 >> 12) & 0b111111) as u8
+    }
+    #[inline]
+    pub fn get_days(&self) -> u8{
+        ((self.0 >> 17) & 0b111111) as u8
+    }
+
+    #[inline]
+    pub fn get_month(&self) -> u8{
+        ((self.0 >> 22) & 0b111111) as u8
+    }
+
+    #[inline]
+    pub fn get_year(&self) -> u64{
+        ((self.0 >> 26) & 0xFFFFFFFF)
+    }
+
+    pub fn to_regular_time(&self) -> chrono::DateTime<Utc>{
+        NaiveDateTime::new(
+            NaiveDate::from_ymd_opt(self.get_year() as i32, self.get_month() as u32, self.get_days() as u32).unwrap(),
+            NaiveTime::from_hms_opt(self.get_hours() as u32, self.get_minutes() as u32, self.get_seconds() as u32).unwrap()
+        ).and_utc()
+    }
 }
 
 #[derive(Pod, Zeroable, Copy, Clone)]
 #[repr(C, packed)]
 pub struct TicketInternalData{
-    issued_time: KerberosDateTime,
+    pub issued_time: KerberosDateTime,
     pub pid: u32,
     pub session_key: [u8; 32],
 }

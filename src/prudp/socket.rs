@@ -30,8 +30,8 @@ type OnConnectHandlerFn = Box<dyn Fn(PRUDPPacket, u8) -> Pin<Box<dyn Future<Outp
 type OnDataHandlerFn = Box<dyn for<'a> Fn(PRUDPPacket, Arc<SocketData>, &'a mut MutexGuard<'_, ConnectionData>) -> Pin<Box<dyn Future<Output=()> + 'a + Send>> + Send + Sync>;
 
 pub struct ActiveSecureConnectionData {
-    pid: u32,
-    session_key: [u8; 32],
+    pub(crate) pid: u32,
+    pub(crate) session_key: [u8; 32],
 }
 
 pub struct SocketData {
@@ -41,6 +41,7 @@ pub struct SocketData {
     connections: RwLock<HashMap<PRUDPSockAddr, Arc<Mutex<ConnectionData>>>>,
     on_connect_handler: OnConnectHandlerFn,
     on_data_handler: OnDataHandlerFn,
+
 }
 
 pub struct EncryptionPair{
@@ -54,6 +55,7 @@ pub struct ActiveConnectionData {
     pub reliable_client_queue: VecDeque<PRUDPPacket>,
     pub encryption_pairs: Vec<EncryptionPair>,
     pub server_session_id: u8,
+    pub connection_id: u32,
     pub active_secure_connection_data: Option<ActiveSecureConnectionData>
 }
 
@@ -227,7 +229,7 @@ impl SocketData {
                 };
 
                 let Some((
-                             accepted,
+                             response_data,
                              encryption_pairs,
                              active_secure_connection_data
                          )) = (self.on_connect_handler)(packet.clone(), *max_substream).await else {
@@ -242,10 +244,13 @@ impl SocketData {
                     reliable_client_counter: 2,
                     reliable_server_counter: 1,
                     server_session_id: packet.header.session_id,
-                    active_secure_connection_data
+                    active_secure_connection_data,
+                    connection_id: random()
                 });
 
                 let mut response_packet = packet.base_response_packet();
+
+                response_packet.payload = response_data;
 
                 response_packet.header.types_and_flags.set_types(CONNECT);
                 response_packet.header.types_and_flags.set_flag(ACK);
@@ -286,14 +291,7 @@ impl SocketData {
 
                 response_packet.set_sizes();
 
-                let potential_session_key = connection
-                    .active_connection_data
-                    .as_ref()
-                    .unwrap().active_secure_connection_data
-                    .as_ref()
-                    .map(|s| s.session_key);
-
-                response_packet.calculate_and_assign_signature(self.access_key, potential_session_key, Some(connection.server_signature));
+                response_packet.calculate_and_assign_signature(self.access_key, None, Some(connection.server_signature));
 
                 let mut vec = Vec::new();
                 response_packet.write_to(&mut vec).expect("somehow failed to convert backet to bytes");
@@ -322,7 +320,14 @@ impl SocketData {
                         ack.header.session_id = active_connection.server_session_id;
 
                         ack.set_sizes();
-                        ack.calculate_and_assign_signature(self.access_key, None, Some(connection.server_signature));
+                        let potential_session_key = connection
+                            .active_connection_data
+                            .as_ref()
+                            .unwrap().active_secure_connection_data
+                            .as_ref()
+                            .map(|s| s.session_key);
+
+                        ack.calculate_and_assign_signature(self.access_key, potential_session_key, Some(connection.server_signature));
 
                         let mut vec = Vec::new();
                         ack.write_to(&mut vec).expect("somehow failed to convert backet to bytes");
@@ -383,7 +388,13 @@ impl SocketData {
                     ack.header.session_id = active_connection.server_session_id;
 
                     ack.set_sizes();
-                    ack.calculate_and_assign_signature(self.access_key, None, Some(*server_signature));
+
+                    let potential_session_key = active_connection.
+                        active_secure_connection_data
+                        .as_ref()
+                        .map(|s| s.session_key);
+
+                    ack.calculate_and_assign_signature(self.access_key, potential_session_key, Some(*server_signature));
 
                     let mut vec = Vec::new();
                     ack.write_to(&mut vec).expect("somehow failed to convert backet to bytes");
@@ -392,28 +403,27 @@ impl SocketData {
                 }
             }
             DISCONNECT => {
-                let ConnectionData{
-                    server_signature,
-                    active_connection_data,
-                    ..
-                } = &*connection;
 
-                let Some(active_connection) = active_connection_data.as_ref() else {
+                let Some(active_connection) = &connection.active_connection_data else {
                     return;
                 };
 
+
+
+                info!("client disconnected");
+
                 let mut ack = packet.base_acknowledgement_packet();
+
+                ack.header.session_id = active_connection.server_session_id;
 
                 ack.set_sizes();
 
-                let potential_session_key = active_connection_data
-                    .as_ref()
-                    .unwrap().active_secure_connection_data
+                let potential_session_key = active_connection.active_secure_connection_data
                     .as_ref()
                     .map(|s| s.session_key);
 
 
-                ack.calculate_and_assign_signature(self.access_key, potential_session_key, Some(*server_signature));
+                ack.calculate_and_assign_signature(self.access_key, potential_session_key, Some(connection.server_signature));
 
                 let mut vec = Vec::new();
                 ack.write_to(&mut vec).expect("somehow failed to convert backet to bytes");
@@ -450,7 +460,14 @@ impl ConnectionData{
 
         packet.set_sizes();
 
-        packet.calculate_and_assign_signature(socket.access_key, None, Some(self.server_signature));
+        let potential_session_key = self.active_connection_data
+            .as_ref()
+            .unwrap().active_secure_connection_data
+            .as_ref()
+            .map(|s| s.session_key);
+
+
+        packet.calculate_and_assign_signature(socket.access_key, potential_session_key, Some(self.server_signature));
 
         let mut vec = Vec::new();
 

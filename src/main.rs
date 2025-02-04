@@ -15,10 +15,12 @@ use crate::nex::account::Account;
 use crate::protocols::auth;
 use crate::protocols::auth::AuthProtocolConfig;
 use crate::protocols::server::RMCProtocolServer;
-use crate::prudp::socket::{EncryptionPair, Socket};
+use crate::prudp::socket::{ActiveSecureConnectionData, EncryptionPair, Socket};
 use crate::prudp::packet::{PRUDPPacket, VirtualPort};
 use crate::prudp::router::Router;
+use crate::prudp::secure::{generate_secure_encryption_pairs, read_secure_connection_data};
 use crate::rmc::message::RMCMessage;
+use crate::rmc::structures::RmcSerialize;
 
 mod endianness;
 mod prudp;
@@ -164,7 +166,9 @@ async fn start_secure_server() -> SecureServer{
 
     info!("setting up endpoints");
 
-    let rmcserver = RMCProtocolServer::new(Box::new([]));
+    let rmcserver = RMCProtocolServer::new(Box::new([
+        Box::new(protocols::secure::bound_protocol())
+    ]));
 
     let mut socket =
         Socket::new(
@@ -174,9 +178,24 @@ async fn start_secure_server() -> SecureServer{
             Box::new(|p, count|{
                 Box::pin(
                     async move {
+                        let (session_key, pid, check_value) = read_secure_connection_data(&p.payload, &SECURE_SERVER_ACCOUNT)?;
 
+                        let check_value_response = check_value + 1;
 
-                        Some((Vec::new(), Vec::new(), None))
+                        let data = bytemuck::bytes_of(&check_value_response);
+
+                        let mut response = Vec::new();
+
+                        data.serialize(&mut response).ok()?;
+
+                        let encryption_pairs = generate_secure_encryption_pairs(session_key, count);
+
+                        Some((response, encryption_pairs, Some(
+                            ActiveSecureConnectionData{
+                                pid,
+                                session_key
+                            }
+                        )))
                     }
                 )
             }),

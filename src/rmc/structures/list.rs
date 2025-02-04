@@ -1,5 +1,6 @@
 use std::io::{Read, Write};
 use bytemuck::bytes_of;
+use crate::endianness::{IS_BIG_ENDIAN, ReadExtensions};
 use crate::rmc::structures::RmcSerialize;
 
 
@@ -15,7 +16,15 @@ impl<T: RmcSerialize> RmcSerialize for Vec<T>{
         Ok(())
     }
 
-    fn deserialize(reader: &mut dyn Read) -> crate::rmc::structures::Result<Self> {
-        todo!()
+    fn deserialize(mut reader: &mut dyn Read) -> crate::rmc::structures::Result<Self> {
+        let len: u32 = reader.read_struct(IS_BIG_ENDIAN)?;
+
+        let mut vec = Vec::with_capacity(len as usize);
+
+        for _ in 0..len{
+            vec.push(T::deserialize(reader)?);
+        }
+
+        Ok(vec)
     }
 }

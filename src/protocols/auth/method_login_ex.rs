@@ -7,11 +7,12 @@ use crate::kerberos::KerberosDateTime;
 use crate::nex::account::Account;
 use crate::protocols::auth::AuthProtocolConfig;
 use crate::protocols::auth::ticket_generation::generate_ticket;
+use crate::prudp::socket::ConnectionData;
+use crate::rmc;
 use crate::rmc::message::RMCMessage;
 use crate::rmc::response::{ErrorCode, RMCResponseResult};
 use crate::rmc::structures::{RmcSerialize};
 use crate::rmc::structures::any::Any;
-use crate::rmc::structures::connection_data::ConnectionData;
 use crate::rmc::structures::qresult::QResult;
 
 pub async fn login_ex(rmcmessage: &RMCMessage, proto_data: AuthProtocolConfig, pid: u32) -> RMCResponseResult{
@@ -32,7 +33,7 @@ pub async fn login_ex(rmcmessage: &RMCMessage, proto_data: AuthProtocolConfig, p
 
     let result = QResult::success(ErrorCode::Core_Unknown);
 
-    let connection_data = ConnectionData{
+    let connection_data = rmc::structures::connection_data::ConnectionData{
         station_url: proto_data.station_url,
         special_station_url: "",
         date_time: KerberosDateTime::now(),
@@ -50,7 +51,7 @@ pub async fn login_ex(rmcmessage: &RMCMessage, proto_data: AuthProtocolConfig, p
     return rmcmessage.success_with_data(response);
 }
 
-pub async fn login_ex_raw_params(rmcmessage: &RMCMessage, data: AuthProtocolConfig) -> RMCResponseResult{
+pub async fn login_ex_raw_params(rmcmessage: &RMCMessage, _: &mut ConnectionData, data: AuthProtocolConfig) -> RMCResponseResult{
     let mut reader = Cursor::new(&rmcmessage.rest_of_data);
 
     let Ok(str) =  String::deserialize(&mut reader) else {

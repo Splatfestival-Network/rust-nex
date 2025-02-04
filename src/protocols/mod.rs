@@ -1,10 +1,14 @@
+use crate::prudp::socket::ConnectionData;
+
 pub mod auth;
 pub mod server;
+pub mod secure;
+
 #[macro_export]
 macro_rules! define_protocol {
     ($id:literal ($($varname:ident : $ty:ty),*) => {$($func_id:literal => $func:path),*} ) => {
         #[allow(unused_parens)]
-        async fn protocol (rmcmessage: &RMCMessage, $($varname : $ty),*) -> Option<RMCResponse>{
+        async fn protocol (rmcmessage: &crate::RMCMessage, connection: &mut crate::protocols::ConnectionData, $($varname : $ty),*) -> Option<crate::rmc::response::RMCResponse>{
             if rmcmessage.protocol_id != $id{
                 return None;
             }
@@ -13,33 +17,34 @@ macro_rules! define_protocol {
 
             let response_result = match rmcmessage.method_id{
                 $(
-                    $func_id => $func ( rmcmessage, self_data).await,
+                    $func_id => $func ( rmcmessage, connection, self_data).await,
                 )*
                 _ => {
-                    error!("invalid method id sent to protocol {}: {:?}", $id, rmcmessage.method_id);
+                    log::error!("invalid method id sent to protocol {}: {:?}", $id, rmcmessage.method_id);
                     return Some(
-                        RMCResponse{
+                        crate::rmc::response::RMCResponse{
                             protocol_id: $id,
-                            response_result: rmcmessage.error_result_with_code(ErrorCode::Core_NotImplemented)
+                            response_result: rmcmessage.error_result_with_code(crate::rmc::response::ErrorCode::Core_NotImplemented)
                         }
                     );
                 }
             };
 
-            Some(RMCResponse{
+            Some(crate::rmc::response::RMCResponse{
                 protocol_id: $id,
                 response_result
             })
         }
         #[allow(unused_parens)]
-        pub fn bound_protocol($($varname : $ty,)*) -> Box<dyn for<'message_lifetime> Fn(&'message_lifetime RMCMessage) -> ::std::pin::Pin<Box<dyn ::std::future::Future<Output = Option<RMCResponse>> + Send + 'message_lifetime>> + Send + Sync>{
+        pub fn bound_protocol($($varname : $ty,)*) -> Box<dyn for<'message_lifetime> Fn(&'message_lifetime crate::RMCMessage, &'message_lifetime mut crate::protocols::ConnectionData)
+            -> ::std::pin::Pin<Box<dyn ::std::future::Future<Output = Option<crate::rmc::response::RMCResponse>> + Send + 'message_lifetime>> + Send + Sync>{
             Box::new(
-                move |v| {
+                move |v, cd| {
                     Box::pin(async move {
                         $(
                         let $varname = $varname.clone();
                         )*
-                        protocol(v, $($varname,)*).await
+                        protocol(v, cd, $($varname,)*).await
                     })
                 }
             )
