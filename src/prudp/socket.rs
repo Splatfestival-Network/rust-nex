@@ -432,7 +432,7 @@ impl SocketData {
                 self.socket.send_to(&vec, client_address.regular_socket_addr).await.expect("failed to send data back");
                 self.socket.send_to(&vec, client_address.regular_socket_addr).await.expect("failed to send data back");
             }
-            _ => unimplemented!("unimplemented packet type: {}", packet.header.types_and_flags.get_types())
+            _ => error!("unimplemented packet type: {}", packet.header.types_and_flags.get_types())
         }
     }
 }
