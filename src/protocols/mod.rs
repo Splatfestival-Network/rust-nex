@@ -22,6 +22,12 @@ static IS_MAINTENANCE: Lazy<bool> = Lazy::new(|| {
         .map(|v| v.parse().expect("IS_MAINTENANCE should be a boolean value"))
         .unwrap_or(false)
 });
+static BYPASS_LEVEL: Lazy<i32> = Lazy::new(|| {
+    env::var("MAINTENANCE_BYPASS_MINIMUM_ACCESS_LEVEL")
+        .ok()
+        .map(|v| v.parse().expect("IS_MAINTENANCE should be a boolean value"))
+        .unwrap_or(3)
+});
 
 
 pub fn block_if_maintenance<'a>(rmcmessage: &'a RMCMessage, conn: &'a mut ConnectionData) -> Pin<Box<(dyn Future<Output=Option<RMCResponse>> + Send + 'a)>> {
@@ -30,7 +36,7 @@ pub fn block_if_maintenance<'a>(rmcmessage: &'a RMCMessage, conn: &'a mut Connec
             if let Some(secure_conn) = active_conn.active_secure_connection_data.as_ref() {
                 if let Ok(mut client) = grpc::account::Client::new().await {
                     if let Ok(client_data) = client.get_user_data(secure_conn.pid).await{
-                        if client_data.access_level >= 2{
+                        if client_data.access_level >= *BYPASS_LEVEL{
                             return None;
                         }
                     }
