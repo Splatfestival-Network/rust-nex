@@ -17,6 +17,8 @@ impl<'a> RmcSerialize for ConnectionData<'a>{
             self.special_protocols.serialize(v).expect("unable to write special protocols");
             self.special_station_url.serialize(v).expect("unable to write special station url");
             v.write_all(bytes_of(&self.date_time)).expect("unable to write date time");
+
+            Ok(())
         })
     }
 

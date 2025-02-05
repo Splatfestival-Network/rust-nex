@@ -284,9 +284,3 @@ mod test{
         println!("packet: {:?}", packet);
     }
 }
-
-#[derive(RmcSerialize)]
-#[rmc_struct(0)]
-struct MatchmakeParam{
-    params: Vec<(String, Variant)>
-}
