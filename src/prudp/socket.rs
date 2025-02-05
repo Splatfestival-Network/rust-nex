@@ -175,19 +175,17 @@ impl SocketData {
         let mut connection = conn.lock().await;
 
         if (packet.header.types_and_flags.get_flags() & ACK) != 0 {
-            info!("acknowledgement recieved");
+            //todo: handle acknowledgements and resending packets propperly
             return;
         }
 
         if (packet.header.types_and_flags.get_flags() & MULTI_ACK) != 0 {
-            info!("acknowledgement recieved");
             return;
         }
 
 
         match packet.header.types_and_flags.get_types() {
             SYN => {
-                info!("got syn");
                 // reset heartbeat?
                 let mut response_packet = packet.base_response_packet();
 
@@ -222,8 +220,6 @@ impl SocketData {
                 self.socket.send_to(&vec, client_address.regular_socket_addr).await.expect("failed to send data back");
             }
             CONNECT => {
-                info!("got connect");
-
                 let Some(MaximumSubstreamId(max_substream)) = packet.options.iter().find(|v| matches!(v, MaximumSubstreamId(_))) else {
                     return;
                 };
@@ -306,8 +302,6 @@ impl SocketData {
                         error!("got data packet on non active connection!");
                         return;
                     };
-
-                    info!("ctr: {}, packet seq: {}", active_connection.reliable_client_counter, packet.header.sequence_id);
 
                     match active_connection.reliable_client_queue.binary_search_by_key(&packet.header.sequence_id, |p| p.header.sequence_id) {
                         Ok(_) => warn!("recieved packet twice"),
@@ -407,10 +401,6 @@ impl SocketData {
                 let Some(active_connection) = &connection.active_connection_data else {
                     return;
                 };
-
-
-
-                info!("client disconnected");
 
                 let mut ack = packet.base_acknowledgement_packet();
 

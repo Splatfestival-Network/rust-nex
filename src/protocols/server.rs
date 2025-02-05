@@ -24,8 +24,6 @@ impl RMCProtocolServer{
             return;
         };
 
-        println!("recieved rmc message: {{ protocol: {}, method: {}}}", rmc.protocol_id, rmc.method_id);
-
         for proto in &self.0 {
             if let Some(response) = proto(&rmc, connection).await {
                 send_response(&packet, &socket, connection, response).await;
