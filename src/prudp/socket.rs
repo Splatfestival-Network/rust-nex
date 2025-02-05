@@ -412,7 +412,6 @@ impl SocketData {
                     .as_ref()
                     .map(|s| s.session_key);
 
-
                 ack.calculate_and_assign_signature(self.access_key, potential_session_key, Some(connection.server_signature));
 
                 let mut vec = Vec::new();
