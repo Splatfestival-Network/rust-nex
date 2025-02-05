@@ -14,7 +14,7 @@ use simplelog::{ColorChoice, CombinedLogger, Config, LevelFilter, TerminalMode, 
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use crate::nex::account::Account;
-use crate::protocols::auth;
+use crate::protocols::{auth, block_if_maintenance};
 use crate::protocols::auth::AuthProtocolConfig;
 use crate::protocols::matchmake_common::MatchmakeData;
 use crate::protocols::server::RMCProtocolServer;
@@ -58,15 +58,22 @@ static SECURE_SERVER_PORT: Lazy<u16> = Lazy::new(||{
         .unwrap_or(10001)
 });
 
-static OWN_IP: Lazy<Ipv4Addr> = Lazy::new(||{
+static OWN_IP_PRIVATE: Lazy<Ipv4Addr> = Lazy::new(||{
     env::var("SERVER_IP")
         .ok()
         .and_then(|s| s.parse().ok())
         .expect("no public ip specified")
 });
 
+static OWN_IP_PUBLIC: Lazy<Ipv4Addr> = Lazy::new(||{
+    env::var("SERVER_IP_PUBLIC")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(*OWN_IP_PRIVATE)
+});
+
 static SECURE_STATION_URL: Lazy<String> = Lazy::new(||
-    format!("prudps:/PID=2;sid=1;stream=10;type=2;address={};port={};CID=1", *OWN_IP, *SECURE_SERVER_PORT)
+    format!("prudps:/PID=2;sid=1;stream=10;type=2;address={};port={};CID=1", *OWN_IP_PUBLIC, *SECURE_SERVER_PORT)
 );
 
 #[tokio::main]
@@ -93,10 +100,10 @@ struct AuthServer{
 }
 
 async fn start_auth_server() -> AuthServer{
-    info!("starting auth server on {}:{}", *OWN_IP, *AUTH_SERVER_PORT);
+    info!("starting auth server on {}:{}", *OWN_IP_PRIVATE, *AUTH_SERVER_PORT);
 
     let (router, join_handle) =
-        Router::new(SocketAddrV4::new(*OWN_IP, *AUTH_SERVER_PORT)).await
+        Router::new(SocketAddrV4::new(*OWN_IP_PRIVATE, *AUTH_SERVER_PORT)).await
             .expect("unable to startauth server");
 
     info!("setting up endpoints");
@@ -162,10 +169,10 @@ struct SecureServer{
 }
 
 async fn start_secure_server() -> SecureServer{
-    info!("starting secure server on {}:{}", *OWN_IP, *SECURE_SERVER_PORT);
+    info!("starting secure server on {}:{}", *OWN_IP_PRIVATE, *SECURE_SERVER_PORT);
 
     let (router, join_handle) =
-        Router::new(SocketAddrV4::new(*OWN_IP, *SECURE_SERVER_PORT)).await
+        Router::new(SocketAddrV4::new(*OWN_IP_PRIVATE, *SECURE_SERVER_PORT)).await
             .expect("unable to startauth server");
 
     info!("setting up endpoints");
@@ -175,6 +182,7 @@ async fn start_secure_server() -> SecureServer{
     ));
 
     let rmcserver = RMCProtocolServer::new(Box::new([
+        Box::new(block_if_maintenance),
         Box::new(protocols::secure::bound_protocol()),
         Box::new(protocols::matchmake_extension::bound_protocol(matchmake_data))
     ]));

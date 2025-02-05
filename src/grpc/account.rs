@@ -9,7 +9,7 @@ use tonic::codegen::InterceptedService;
 use tonic::transport::Channel;
 use crate::grpc::InterceptorFunc;
 use crate::grpc::protobufs::account::account_client::AccountClient;
-use crate::grpc::protobufs::account::GetNexPasswordRequest;
+use crate::grpc::protobufs::account::{GetNexPasswordRequest, GetUserDataRequest, GetUserDataResponse};
 
 static API_KEY: Lazy<MetadataValue<Ascii>> = Lazy::new(||{
     let key = env::var("ACCOUNT_GRPC_API_KEY")
@@ -73,6 +73,16 @@ impl Client{
         let response = self.0.get_nex_password(req).await?.into_inner();
 
         Ok(response.password.as_bytes().try_into()?)
+    }
+
+    pub async fn get_user_data(&mut self , pid: u32) -> Result<GetUserDataResponse>{
+        let req = Request::new(GetUserDataRequest{
+            pid
+        });
+
+        let response = self.0.get_user_data(req).await?.into_inner();
+
+        Ok(response)
     }
 }
 

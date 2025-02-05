@@ -1,10 +1,56 @@
+use std::env;
+use std::future::Future;
+use std::pin::Pin;
+use log::warn;
+use once_cell::sync::Lazy;
+use crate::grpc;
 use crate::prudp::socket::ConnectionData;
+use crate::rmc::message::RMCMessage;
+use crate::rmc::response::{ErrorCode, RMCResponse};
+
 
 pub mod auth;
 pub mod server;
 pub mod secure;
 pub mod matchmake_extension;
 pub mod matchmake_common;
+
+
+static IS_MAINTENANCE: Lazy<bool> = Lazy::new(|| {
+    env::var("IS_MAINTENANCE")
+        .ok()
+        .map(|v| v.parse().expect("IS_MAINTENANCE should be a boolean value"))
+        .unwrap_or(false)
+});
+
+
+pub fn block_if_maintenance<'a>(rmcmessage: &'a RMCMessage, conn: &'a mut ConnectionData) -> Pin<Box<(dyn Future<Output=Option<RMCResponse>> + Send + 'a)>> {
+    Box::pin(async move {
+        if let Some(active_conn) = conn.active_connection_data.as_ref() {
+            if let Some(secure_conn) = active_conn.active_secure_connection_data.as_ref() {
+                if let Ok(mut client) = grpc::account::Client::new().await {
+                    if let Ok(client_data) = client.get_user_data(secure_conn.pid).await{
+                        if client_data.access_level >= 2{
+                            return None;
+                        }
+                    }
+                }
+            }
+        }
+
+
+        warn!("login attempted whilest servers are in maintenance");
+
+        if *IS_MAINTENANCE {
+            Some(RMCResponse {
+                protocol_id: rmcmessage.protocol_id as u8,
+                response_result: rmcmessage.error_result_with_code(ErrorCode::RendezVous_GameServerMaintenance),
+            })
+        } else {
+            None
+        }
+    })
+}
 
 #[macro_export]
 macro_rules! define_protocol {
