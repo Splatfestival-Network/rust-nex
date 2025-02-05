@@ -16,7 +16,7 @@ jobs:
     runs-on: self-hosted
     steps:
     - name: Checkout Repository And Submodules
-      uses: actions/checkout@v4
+      uses: actions/checkout@v1
       with:
         submodules: recursive
     
