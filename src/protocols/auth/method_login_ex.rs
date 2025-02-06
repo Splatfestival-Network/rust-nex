@@ -1,13 +1,15 @@
 use std::io::{Cursor, Write};
+use std::sync::Arc;
 use bytemuck::bytes_of;
 use hex::encode;
 use log::{error};
+use tokio::sync::Mutex;
 use crate::grpc::account;
 use crate::kerberos::KerberosDateTime;
 use crate::nex::account::Account;
 use crate::protocols::auth::AuthProtocolConfig;
 use crate::protocols::auth::ticket_generation::generate_ticket;
-use crate::prudp::socket::ConnectionData;
+use crate::prudp::socket::{ConnectionData, SocketData};
 use crate::rmc;
 use crate::rmc::message::RMCMessage;
 use crate::rmc::response::{ErrorCode, RMCResponseResult};
@@ -51,7 +53,7 @@ pub async fn login_ex(rmcmessage: &RMCMessage, proto_data: AuthProtocolConfig, p
     return rmcmessage.success_with_data(response);
 }
 
-pub async fn login_ex_raw_params(rmcmessage: &RMCMessage, _: &mut ConnectionData, data: AuthProtocolConfig) -> RMCResponseResult{
+pub async fn login_ex_raw_params(rmcmessage: &RMCMessage, _: &Arc<SocketData>, _: &Arc<Mutex<ConnectionData>>, data: AuthProtocolConfig) -> RMCResponseResult{
     let mut reader = Cursor::new(&rmcmessage.rest_of_data);
 
     let Ok(str) =  String::deserialize(&mut reader) else {

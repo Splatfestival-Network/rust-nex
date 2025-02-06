@@ -3,13 +3,14 @@ use std::io::Cursor;
 use std::pin::Pin;
 use std::sync::Arc;
 use log::error;
+use tokio::sync::Mutex;
 use crate::prudp::packet::PRUDPPacket;
 use crate::prudp::socket::{ConnectionData, SocketData};
 use crate::rmc::message::RMCMessage;
 use crate::rmc::response::{RMCResponse, RMCResponseResult, send_response};
 use crate::rmc::response::ErrorCode::Core_NotImplemented;
 
-type ContainedProtocolList = Box<[Box<dyn for<'a> Fn(&'a RMCMessage, &'a mut ConnectionData) -> Pin<Box<dyn Future<Output = Option<RMCResponse>> + Send + 'a>> + Send + Sync>]>;
+type ContainedProtocolList = Box<[Box<dyn for<'a> Fn(&'a RMCMessage, &'a Arc<SocketData>, &'a Arc<Mutex<ConnectionData>>) -> Pin<Box<dyn Future<Output = Option<RMCResponse>> + Send + 'a>> + Send + Sync>]>;
 
 pub struct RMCProtocolServer(ContainedProtocolList);
 
@@ -18,27 +19,33 @@ impl RMCProtocolServer{
         Arc::new(Self(protocols))
     }
 
-    pub async fn process_message(&self, packet: PRUDPPacket, socket: &SocketData, connection: &mut ConnectionData){
+    pub async fn process_message(&self, packet: PRUDPPacket, socket: Arc<SocketData>, connection: Arc<Mutex<ConnectionData>>){
         let Ok(rmc) = RMCMessage::new(&mut Cursor::new(&packet.payload)) else {
             error!("error reading rmc message");
             return;
         };
 
+        println!("got rmc message {},{}", rmc.protocol_id, rmc.method_id);
+        
         for proto in &self.0 {
-            if let Some(response) = proto(&rmc, connection).await {
-                send_response(&packet, &socket, connection, response).await;
+            if let Some(response) = proto(&rmc, &socket, &connection).await {
+
+                let mut locked = connection.lock().await;
+                send_response(&packet, &socket, &mut locked, response).await;
+                drop(locked);
                 return;
             }
         }
 
         error!("tried to send message to unimplemented protocol {} with method id {}", rmc.protocol_id, rmc.method_id);
-
-        send_response(&packet, &socket, connection, RMCResponse{
+        let mut locked = connection.lock().await;
+        send_response(&packet, &socket, &mut locked, RMCResponse{
             protocol_id: rmc.protocol_id as u8,
             response_result: RMCResponseResult::Error {
                 call_id: rmc.call_id,
                 error_code: Core_NotImplemented
             }
         }).await;
+
     }
 }

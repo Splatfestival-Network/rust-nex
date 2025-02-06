@@ -3,6 +3,7 @@ use crate::kerberos::KerberosDateTime;
 use crate::rmc::structures;
 use crate::rmc::structures::RmcSerialize;
 
+#[derive(Debug, Clone)]
 pub enum Variant{
     None,
     SInt64(i64),

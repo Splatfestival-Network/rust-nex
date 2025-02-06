@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use std::{env, fs};
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::sync::Arc;
@@ -11,7 +12,7 @@ use once_cell::sync::Lazy;
 use rc4::{KeyInit, Rc4, StreamCipher};
 use rc4::consts::U5;
 use simplelog::{ColorChoice, CombinedLogger, Config, LevelFilter, TerminalMode, TermLogger, WriteLogger};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinHandle;
 use crate::nex::account::Account;
 use crate::protocols::{auth, block_if_maintenance};
@@ -151,7 +152,7 @@ async fn start_auth_server() -> AuthServer{
             }),
             Box::new(move |packet, socket, connection|{
                 let rmcserver = rmcserver.clone();
-                Box::pin(async move { rmcserver.process_message(packet, &socket, connection).await; })
+                Box::pin(async move { rmcserver.process_message(packet, socket, connection).await; })
             })
         ).await.expect("unable to create socket");
 
@@ -177,13 +178,16 @@ async fn start_secure_server() -> SecureServer{
 
     info!("setting up endpoints");
 
-    let matchmake_data = Arc::new(Mutex::new(
-        MatchmakeData{}
+    let matchmake_data = Arc::new(RwLock::new(
+        MatchmakeData{
+            matchmake_sessions: BTreeMap::new()
+        }
     ));
 
     let rmcserver = RMCProtocolServer::new(Box::new([
         Box::new(block_if_maintenance),
         Box::new(protocols::secure::bound_protocol()),
+        Box::new(protocols::matchmake::bound_protocol(matchmake_data.clone())),
         Box::new(protocols::matchmake_extension::bound_protocol(matchmake_data))
     ]));
 
@@ -218,7 +222,7 @@ async fn start_secure_server() -> SecureServer{
             }),
             Box::new(move |packet, socket, connection|{
                 let rmcserver = rmcserver.clone();
-                Box::pin(async move { rmcserver.process_message(packet, &socket, connection).await; })
+                Box::pin(async move { rmcserver.process_message(packet, socket, connection).await; })
             })
         ).await.expect("unable to create socket");
 

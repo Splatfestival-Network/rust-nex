@@ -1,10 +1,12 @@
 use std::env;
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 use log::warn;
 use once_cell::sync::Lazy;
+use tokio::sync::Mutex;
 use crate::grpc;
-use crate::prudp::socket::ConnectionData;
+use crate::prudp::socket::{ConnectionData, SocketData};
 use crate::rmc::message::RMCMessage;
 use crate::rmc::response::{ErrorCode, RMCResponse};
 
@@ -14,7 +16,8 @@ pub mod server;
 pub mod secure;
 pub mod matchmake_extension;
 pub mod matchmake_common;
-
+pub mod matchmake;
+mod notification;
 
 static IS_MAINTENANCE: Lazy<bool> = Lazy::new(|| {
     env::var("IS_MAINTENANCE")
@@ -30,8 +33,10 @@ static BYPASS_LEVEL: Lazy<i32> = Lazy::new(|| {
 });
 
 
-pub fn block_if_maintenance<'a>(rmcmessage: &'a RMCMessage, conn: &'a mut ConnectionData) -> Pin<Box<(dyn Future<Output=Option<RMCResponse>> + Send + 'a)>> {
+pub fn block_if_maintenance<'a>(rmcmessage: &'a RMCMessage, _: &'a Arc<SocketData> , conn: &'a Arc<Mutex<ConnectionData>>) -> Pin<Box<(dyn Future<Output=Option<RMCResponse>> + Send + 'a)>> {
     Box::pin(async move {
+        let mut conn = conn.lock().await;
+
         if let Some(active_conn) = conn.active_connection_data.as_ref() {
             if let Some(secure_conn) = active_conn.active_secure_connection_data.as_ref() {
                 if let Ok(mut client) = grpc::account::Client::new().await {
@@ -62,7 +67,7 @@ pub fn block_if_maintenance<'a>(rmcmessage: &'a RMCMessage, conn: &'a mut Connec
 macro_rules! define_protocol {
     ($id:literal ($($varname:ident : $ty:ty),*) => {$($func_id:literal => $func:path),*} ) => {
         #[allow(unused_parens)]
-        async fn protocol (rmcmessage: &crate::RMCMessage, connection: &mut crate::protocols::ConnectionData, $($varname : $ty),*) -> Option<crate::rmc::response::RMCResponse>{
+        async fn protocol (rmcmessage: &crate::RMCMessage, socket: &::std::sync::Arc<crate::prudp::socket::SocketData>, connection: &::std::sync::Arc<::tokio::sync::Mutex<crate::protocols::ConnectionData>>, $($varname : $ty),*) -> Option<crate::rmc::response::RMCResponse>{
             if rmcmessage.protocol_id != $id{
                 return None;
             }
@@ -71,7 +76,7 @@ macro_rules! define_protocol {
 
             let response_result = match rmcmessage.method_id{
                 $(
-                    $func_id => $func ( rmcmessage, connection, self_data).await,
+                    $func_id => $func ( rmcmessage, socket, connection, self_data).await,
                 )*
                 _ => {
                     log::error!("invalid method id sent to protocol {}: {:?}", $id, rmcmessage.method_id);
@@ -90,10 +95,10 @@ macro_rules! define_protocol {
             })
         }
         #[allow(unused_parens)]
-        pub fn bound_protocol($($varname : $ty,)*) -> Box<dyn for<'message_lifetime> Fn(&'message_lifetime crate::RMCMessage, &'message_lifetime mut crate::protocols::ConnectionData)
+        pub fn bound_protocol($($varname : $ty,)*) -> Box<dyn for<'message_lifetime> Fn(&'message_lifetime crate::RMCMessage, &'message_lifetime ::std::sync::Arc<crate::prudp::socket::SocketData>, &'message_lifetime ::std::sync::Arc<::tokio::sync::Mutex<crate::protocols::ConnectionData>>)
             -> ::std::pin::Pin<Box<dyn ::std::future::Future<Output = Option<crate::rmc::response::RMCResponse>> + Send + 'message_lifetime>> + Send + Sync>{
             Box::new(
-                move |v, cd| {
+                move |v, s, cd| {
                     Box::pin({
                         $(
                         let $varname = $varname.clone();
@@ -103,7 +108,7 @@ macro_rules! define_protocol {
                             $(
                             let $varname = $varname.clone();
                             )*
-                            protocol(v, cd, $($varname,)*).await
+                            protocol(v, s, cd, $($varname,)*).await
                         }
                     })
                 }

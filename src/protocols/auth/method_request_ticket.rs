@@ -1,11 +1,13 @@
 use std::io::Cursor;
+use std::sync::Arc;
 use log::error;
+use tokio::sync::Mutex;
 use crate::endianness::{IS_BIG_ENDIAN, ReadExtensions};
 use crate::grpc::account;
 use crate::protocols::auth::{AuthProtocolConfig, get_login_data_by_pid};
 use crate::protocols::auth::method_login_ex::login_ex;
 use crate::protocols::auth::ticket_generation::generate_ticket;
-use crate::prudp::socket::ConnectionData;
+use crate::prudp::socket::{ConnectionData, SocketData};
 use crate::rmc::message::RMCMessage;
 use crate::rmc::response::{ErrorCode, RMCResponseResult};
 use crate::rmc::response::ErrorCode::Core_Unknown;
@@ -39,7 +41,7 @@ pub async fn request_ticket(rmcmessage: &RMCMessage, data: AuthProtocolConfig, s
     rmcmessage.success_with_data(response)
 }
 
-pub async fn request_ticket_raw_params(rmcmessage: &RMCMessage,  _: &mut ConnectionData, data: AuthProtocolConfig) -> RMCResponseResult{
+pub async fn request_ticket_raw_params(rmcmessage: &RMCMessage, _: &Arc<SocketData>,  _: &Arc<Mutex<ConnectionData>>, data: AuthProtocolConfig) -> RMCResponseResult{
     let mut reader = Cursor::new(&rmcmessage.rest_of_data);
 
     let Ok(source_pid) = reader.read_struct(IS_BIG_ENDIAN) else {

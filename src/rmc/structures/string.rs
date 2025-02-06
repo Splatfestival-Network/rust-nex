@@ -27,7 +27,7 @@ impl RmcSerialize for &str{
         panic!("cannot serialize to &str")
     }
     fn serialize(&self, writer: &mut dyn Write) -> Result<()> {
-        let u16_len: u16 = self.len() as u16;
+        let u16_len: u16 = (self.len() + 1) as u16;
         writer.write(bytes_of(&u16_len))?;
 
         writer.write(self.as_bytes())?;

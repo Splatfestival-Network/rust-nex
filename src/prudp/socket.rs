@@ -27,7 +27,7 @@ pub struct Socket {
 
 
 type OnConnectHandlerFn = Box<dyn Fn(PRUDPPacket, u8) -> Pin<Box<dyn Future<Output=Option<(Vec<u8>, Vec<EncryptionPair>, Option<ActiveSecureConnectionData>)>> + Send>> + Send + Sync>;
-type OnDataHandlerFn = Box<dyn for<'a> Fn(PRUDPPacket, Arc<SocketData>, &'a mut MutexGuard<'_, ConnectionData>) -> Pin<Box<dyn Future<Output=()> + 'a + Send>> + Send + Sync>;
+type OnDataHandlerFn = Box<dyn Fn(PRUDPPacket, Arc<SocketData>, Arc<Mutex<ConnectionData>>) -> Pin<Box<dyn Future<Output=()> + Send>> + Send + Sync>;
 
 pub struct ActiveSecureConnectionData {
     pub(crate) pid: u32,
@@ -38,7 +38,7 @@ pub struct SocketData {
     virtual_port: VirtualPort,
     pub socket: Arc<UdpSocket>,
     pub access_key: &'static str,
-    connections: RwLock<HashMap<PRUDPSockAddr, Arc<Mutex<ConnectionData>>>>,
+    connections: RwLock<HashMap<PRUDPSockAddr, (Arc<Mutex<ConnectionData>>, Arc<Mutex<()>>)>>,
     on_connect_handler: OnConnectHandlerFn,
     on_data_handler: OnDataHandlerFn,
 
@@ -67,6 +67,8 @@ pub struct ConnectionData {
     pub server_signature: [u8; 16],
     pub active_connection_data: Option<ActiveConnectionData>,
 }
+
+
 
 
 impl Socket {
@@ -146,14 +148,14 @@ impl SocketData {
             let mut conn = self.connections.write().await;
             //only insert if we STILL dont have the connection preventing double insertion
             if !conn.contains_key(&client_address) {
-                conn.insert(client_address, Arc::new(Mutex::new(ConnectionData {
+                conn.insert(client_address, (Arc::new(Mutex::new(ConnectionData {
                     sock_addr: client_address,
                     id: random(),
                     signature: [0; 16],
                     server_signature: [0; 16],
 
                     active_connection_data: None,
-                })));
+                })), Arc::new(Mutex::new(()))));
             }
             drop(conn);
         } else {
@@ -172,20 +174,24 @@ impl SocketData {
         // dont keep holding the connections list unnescesarily
         drop(connections);
 
-        let mut connection = conn.lock().await;
+        let mut connection = conn.0.lock().await;
+        //let _mutual_exclusion_packet_handeling_mtx = conn.1.lock().await;
 
         if (packet.header.types_and_flags.get_flags() & ACK) != 0 {
             //todo: handle acknowledgements and resending packets propperly
+            println!("got ack");
             return;
         }
 
         if (packet.header.types_and_flags.get_flags() & MULTI_ACK) != 0 {
+            println!("got ack");
             return;
         }
 
 
         match packet.header.types_and_flags.get_types() {
             SYN => {
+                println!("got syn");
                 // reset heartbeat?
                 let mut response_packet = packet.base_response_packet();
 
@@ -220,6 +226,7 @@ impl SocketData {
                 self.socket.send_to(&vec, client_address.regular_socket_addr).await.expect("failed to send data back");
             }
             CONNECT => {
+                println!("got connect");
                 let Some(MaximumSubstreamId(max_substream)) = packet.options.iter().find(|v| matches!(v, MaximumSubstreamId(_))) else {
                     return;
                 };
@@ -328,13 +335,18 @@ impl SocketData {
 
                         self.socket.send_to(&vec, client_address.regular_socket_addr).await.expect("failed to send data back");
                     }
-
+                    drop(connection);
                     while let Some(mut packet) = {
-                        connection.active_connection_data.as_mut().map(|a|
+                        let mut locked = conn.0.lock().await;
+
+                        let packet = locked.active_connection_data.as_mut().map(|a|
                         a.reliable_client_queue
                             .front()
                             .is_some_and(|v| v.header.sequence_id == a.reliable_client_counter)
-                            .then(|| a.reliable_client_queue.pop_front())).flatten().flatten()
+                            .then(|| a.reliable_client_queue.pop_front())).flatten().flatten();
+
+                        drop(locked);
+                        packet
                     } {
                         if packet.options.iter().any(|v| match v{
                             PacketOption::FragmentId(f) => *f != 0,
@@ -343,7 +355,9 @@ impl SocketData {
                             error!("fragmented packets are unsupported right now")
                         }
 
-                        let active_connection = connection.active_connection_data.as_mut()
+                        let mut locked = conn.0.lock().await;
+
+                        let active_connection = locked.active_connection_data.as_mut()
                             .expect("we litterally just recieved a packet which requires the connection to be active, failing this should be impossible");
 
                         active_connection.reliable_client_counter = active_connection.reliable_client_counter.overflowing_add(1).0;
@@ -354,9 +368,10 @@ impl SocketData {
 
                         stream.apply_keystream(&mut packet.payload);
 
+                        drop(locked);
                         // we cant divert this off to another thread we HAVE to process it now to keep order
 
-                        (self.on_data_handler)(packet, self.clone(), &mut connection).await;
+                        (self.on_data_handler)(packet, self.clone(), conn.0.clone()).await;
                         // ignored for now
                     }
                 } else {
@@ -397,7 +412,7 @@ impl SocketData {
                 }
             }
             DISCONNECT => {
-
+                println!("got disconnect");
                 let Some(active_connection) = &connection.active_connection_data else {
                     return;
                 };
@@ -466,6 +481,8 @@ impl ConnectionData{
             error!("unable to send packet to destination: {}", e);
         }
     }
+    
+    
 }
 
 #[cfg(test)]

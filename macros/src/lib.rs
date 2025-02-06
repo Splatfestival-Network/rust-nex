@@ -1,7 +1,6 @@
 extern crate proc_macro;
 
 use proc_macro2::TokenTree;
-use quote::__private::ext::RepToTokensExt;
 use proc_macro::TokenStream;
 
 use syn::{parse_macro_input, DeriveInput, Data};
@@ -23,7 +22,7 @@ pub fn rmc_serialize(input: TokenStream) -> TokenStream {
         panic!("rmc struct type MUST be a struct");
     };
 
-    /// generate base data
+    // generate base data
 
     let serialize_base_content = {
         let mut serialize_content = quote! {};
@@ -87,7 +86,7 @@ pub fn rmc_serialize(input: TokenStream) -> TokenStream {
         }
     };
 
-    /// generate base with extends stuff
+    // generate base with extends stuff
 
     let serialize_base_content = if let Some(attr) = struct_attr{
         let tokens = attr.tokens.clone();

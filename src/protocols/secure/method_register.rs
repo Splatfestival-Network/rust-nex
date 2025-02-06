@@ -1,8 +1,10 @@
 use std::io::{Cursor, Write};
+use std::sync::Arc;
 use bytemuck::bytes_of;
 use log::{error, warn};
+use tokio::sync::Mutex;
 use crate::protocols::auth::AuthProtocolConfig;
-use crate::prudp::socket::ConnectionData;
+use crate::prudp::socket::{ConnectionData, SocketData};
 use crate::prudp::station_url::{nat_types, StationUrl};
 use crate::prudp::station_url::Type::PRUDPS;
 use crate::prudp::station_url::UrlOptions::{Address, NatFiltering, NatMapping, NatType, Port, PrincipalID, RVConnectionID};
@@ -14,9 +16,9 @@ use crate::rmc::structures::RmcSerialize;
 
 type StringList = Vec<String>;
 
-pub async fn register(rmcmessage: &RMCMessage, station_urls: Vec<StationUrl>, conn_data: &mut ConnectionData) -> RMCResponseResult{
-
-    let Some(active_connection_data) = conn_data.active_connection_data.as_ref() else {
+pub async fn register(rmcmessage: &RMCMessage, station_urls: Vec<StationUrl>, conn_data: &Arc<Mutex<ConnectionData>>) -> RMCResponseResult{
+    let locked = conn_data.lock().await;
+    let Some(active_connection_data) = locked.active_connection_data.as_ref() else {
         return rmcmessage.error_result_with_code(ErrorCode::RendezVous_NotAuthenticated)
     };
 
@@ -28,8 +30,8 @@ pub async fn register(rmcmessage: &RMCMessage, station_urls: Vec<StationUrl>, co
         url_type: PRUDPS,
         options: vec![
             RVConnectionID(active_connection_data.connection_id),
-            Address(*conn_data.sock_addr.regular_socket_addr.ip()),
-            Port(conn_data.sock_addr.regular_socket_addr.port()),
+            Address(*locked.sock_addr.regular_socket_addr.ip()),
+            Port(locked.sock_addr.regular_socket_addr.port()),
             NatFiltering(0),
             NatMapping(0),
             NatType(nat_types::BEHIND_NAT),
@@ -50,7 +52,7 @@ pub async fn register(rmcmessage: &RMCMessage, station_urls: Vec<StationUrl>, co
     rmcmessage.success_with_data(response)
 }
 
-pub async fn register_raw_params(rmcmessage: &RMCMessage, conn_data: &mut ConnectionData, _: ()) -> RMCResponseResult{
+pub async fn register_raw_params(rmcmessage: &RMCMessage, _: &Arc<SocketData>, conn_data: &Arc<Mutex<ConnectionData>>, _: ()) -> RMCResponseResult{
     let mut reader = Cursor::new(&rmcmessage.rest_of_data);
 
     let Ok(station_urls) = StringList::deserialize(&mut reader) else {

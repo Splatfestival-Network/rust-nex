@@ -25,9 +25,9 @@ pub fn derive_key(pid: u32, password: [u8; 16]) -> [u8; 16]{
 
     key
 }
-#[derive(Pod, Zeroable, Copy, Clone)]
+#[derive(Pod, Zeroable, Copy, Clone, Debug, Eq, PartialEq)]
 #[repr(transparent)]
-pub struct KerberosDateTime(u64);
+pub struct KerberosDateTime(pub u64);
 
 impl KerberosDateTime{
     pub fn new(second: u64, minute: u64, hour: u64, day: u64, month: u64, year:u64 ) -> Self {

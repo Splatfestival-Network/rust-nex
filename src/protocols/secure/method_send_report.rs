@@ -1,8 +1,10 @@
 use std::io::Cursor;
+use std::sync::Arc;
 use log::error;
+use tokio::sync::Mutex;
 use crate::endianness::{IS_BIG_ENDIAN, ReadExtensions};
 use crate::protocols::secure::method_register::register;
-use crate::prudp::socket::ConnectionData;
+use crate::prudp::socket::{ConnectionData, SocketData};
 use crate::prudp::station_url::StationUrl;
 use crate::rmc::message::RMCMessage;
 use crate::rmc::response::{ErrorCode, RMCResponseResult};
@@ -20,7 +22,7 @@ pub async fn send_report(rmcmessage: &RMCMessage, report_id: u32, data: Vec<u8>)
     return rmcmessage.success_with_data(Vec::new());
 }
 
-pub async fn send_report_raw_params(rmcmessage: &RMCMessage, conn_data: &mut ConnectionData, _: ()) -> RMCResponseResult{
+pub async fn send_report_raw_params(rmcmessage: &RMCMessage, _: &Arc<SocketData>, conn_data: &Arc<Mutex<ConnectionData>>, _: ()) -> RMCResponseResult{
     let mut reader = Cursor::new(&rmcmessage.rest_of_data);
 
     let Ok(error_id) = reader.read_struct(IS_BIG_ENDIAN) else {

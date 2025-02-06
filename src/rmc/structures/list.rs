@@ -6,7 +6,7 @@ use crate::rmc::structures::RmcSerialize;
 
 impl<T: RmcSerialize> RmcSerialize for Vec<T>{
     fn serialize(&self, writer: &mut dyn Write) -> crate::rmc::structures::Result<()> {
-        let u32_len = self.len();
+        let u32_len = self.len() as u32;
 
         writer.write_all(bytes_of(&u32_len))?;
         for e in self{

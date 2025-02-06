@@ -1,10 +1,11 @@
 use std::io;
-use std::io::{Read, Seek};
+use std::io::{Read, Seek, Write};
+use bytemuck::bytes_of;
 use log::error;
 use crate::endianness::{IS_BIG_ENDIAN, ReadExtensions};
 use crate::rmc::response::{ErrorCode, RMCResponseResult};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RMCMessage{
     pub protocol_id: u16,
     pub call_id: u32,
@@ -50,6 +51,23 @@ impl RMCMessage{
             call_id,
             rest_of_data
         })
+    }
+
+    pub fn to_data(&self) -> Vec<u8>{
+        let size = (1 + 4 + 4 + self.rest_of_data.len()) as u32;
+
+        let mut output = Vec::new();
+
+        output.write_all(bytes_of(&size)).expect("unable to write size");
+
+        let proto_id = self.protocol_id as u8;
+
+        output.write_all(bytes_of(&proto_id)).expect("unable to write size");
+
+        output.write_all(bytes_of(&self.call_id)).expect("unable to write size");
+        output.write_all(bytes_of(&self.method_id)).expect("unable to write size");
+
+        output
     }
 
     pub fn error_result_with_code(&self, error_code: ErrorCode) -> RMCResponseResult{
