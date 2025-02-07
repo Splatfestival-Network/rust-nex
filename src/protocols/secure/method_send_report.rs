@@ -3,11 +3,9 @@ use std::sync::Arc;
 use log::error;
 use tokio::sync::Mutex;
 use crate::endianness::{IS_BIG_ENDIAN, ReadExtensions};
-use crate::protocols::secure::method_register::register;
 use crate::prudp::socket::{ConnectionData, SocketData};
-use crate::prudp::station_url::StationUrl;
 use crate::rmc::message::RMCMessage;
-use crate::rmc::response::{ErrorCode, RMCResponseResult};
+use crate::rmc::response::{RMCResponseResult};
 use crate::rmc::response::ErrorCode::Core_InvalidArgument;
 use crate::rmc::structures::qbuffer;
 

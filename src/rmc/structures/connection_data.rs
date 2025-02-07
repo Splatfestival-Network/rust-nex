@@ -12,7 +12,7 @@ pub struct ConnectionData<'a>{
 
 impl<'a> RmcSerialize for ConnectionData<'a>{
     fn serialize(&self, writer: &mut dyn Write) -> crate::rmc::structures::Result<()> {
-        rmc_struct::write_struct(writer, 1, |mut v|{
+        rmc_struct::write_struct(writer, 1, |v|{
             self.station_url.serialize(v).expect("unable to write station url");
             self.special_protocols.serialize(v).expect("unable to write special protocols");
             self.special_station_url.serialize(v).expect("unable to write special station url");

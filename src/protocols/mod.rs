@@ -35,7 +35,7 @@ static BYPASS_LEVEL: Lazy<i32> = Lazy::new(|| {
 
 pub fn block_if_maintenance<'a>(rmcmessage: &'a RMCMessage, _: &'a Arc<SocketData> , conn: &'a Arc<Mutex<ConnectionData>>) -> Pin<Box<(dyn Future<Output=Option<RMCResponse>> + Send + 'a)>> {
     Box::pin(async move {
-        let mut conn = conn.lock().await;
+        let conn = conn.lock().await;
 
         if let Some(active_conn) = conn.active_connection_data.as_ref() {
             if let Some(secure_conn) = active_conn.active_secure_connection_data.as_ref() {

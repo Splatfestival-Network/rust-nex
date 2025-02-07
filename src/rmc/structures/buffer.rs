@@ -1,5 +1,4 @@
 use std::io::{Read, Write};
-use crate::endianness::{IS_BIG_ENDIAN, ReadExtensions};
 use crate::rmc::structures::RmcSerialize;
 
 impl<'a> RmcSerialize for &'a [u8]{

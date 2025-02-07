@@ -10,7 +10,7 @@ struct StructureHeader{
     length: u32
 }
 
-pub fn write_struct(mut writer: &mut dyn Write, version: u8, pred: impl FnOnce(&mut Vec<u8>) -> Result<()> ) -> Result<()> {
+pub fn write_struct(writer: &mut dyn Write, version: u8, pred: impl FnOnce(&mut Vec<u8>) -> Result<()> ) -> Result<()> {
     writer.write_all(&[version])?;
 
     let mut scratch_space: Vec<u8> = Vec::new();

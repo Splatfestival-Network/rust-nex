@@ -1,6 +1,5 @@
 use macros::RmcSerialize;
 use crate::kerberos::KerberosDateTime;
-use crate::rmc::structures::RmcSerialize;
 use crate::rmc::structures::variant::Variant;
 
 // rmc structure

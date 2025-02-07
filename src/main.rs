@@ -7,12 +7,11 @@ use std::net::{Ipv4Addr, SocketAddrV4};
 use std::sync::Arc;
 use chrono::Local;
 use log::info;
-use macros::RmcSerialize;
 use once_cell::sync::Lazy;
 use rc4::{KeyInit, Rc4, StreamCipher};
 use rc4::consts::U5;
 use simplelog::{ColorChoice, CombinedLogger, Config, LevelFilter, TerminalMode, TermLogger, WriteLogger};
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use crate::nex::account::Account;
 use crate::protocols::{auth, block_if_maintenance};
@@ -20,12 +19,11 @@ use crate::protocols::auth::AuthProtocolConfig;
 use crate::protocols::matchmake_common::MatchmakeData;
 use crate::protocols::server::RMCProtocolServer;
 use crate::prudp::socket::{ActiveSecureConnectionData, EncryptionPair, Socket};
-use crate::prudp::packet::{PRUDPPacket, VirtualPort};
+use crate::prudp::packet::{VirtualPort};
 use crate::prudp::router::Router;
 use crate::prudp::secure::{generate_secure_encryption_pairs, read_secure_connection_data};
 use crate::rmc::message::RMCMessage;
 use crate::rmc::structures::RmcSerialize;
-use crate::rmc::structures::variant::Variant;
 
 mod endianness;
 mod prudp;
@@ -121,7 +119,7 @@ async fn start_auth_server() -> AuthServer{
         Box::new(auth::bound_protocol(auth_protocol_config))
     ]));
 
-    let mut socket =
+    let socket =
         Socket::new(
             router.clone(),
             VirtualPort::new(1,10),
@@ -191,7 +189,7 @@ async fn start_secure_server() -> SecureServer{
         Box::new(protocols::matchmake_extension::bound_protocol(matchmake_data))
     ]));
 
-    let mut socket =
+    let socket =
         Socket::new(
             router.clone(),
             VirtualPort::new(1,10),

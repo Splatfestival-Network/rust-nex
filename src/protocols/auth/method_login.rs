@@ -2,7 +2,6 @@ use std::io::Cursor;
 use std::sync::Arc;
 use log::error;
 use tokio::sync::Mutex;
-use crate::nex::account::Account;
 use crate::protocols::auth::AuthProtocolConfig;
 use crate::prudp::socket::{ConnectionData, SocketData};
 use crate::rmc::message::RMCMessage;

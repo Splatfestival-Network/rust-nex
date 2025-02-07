@@ -3,16 +3,12 @@ mod method_login;
 mod ticket_generation;
 mod method_request_ticket;
 
-use std::sync::Arc;
-use log::{error};
 use crate::define_protocol;
 use crate::grpc::account;
 use crate::nex::account::Account;
 use crate::protocols::auth::method_login::login_raw_params;
 use crate::protocols::auth::method_login_ex::login_ex_raw_params;
 use crate::protocols::auth::method_request_ticket::request_ticket_raw_params;
-use crate::rmc::message::RMCMessage;
-use crate::rmc::response::{ErrorCode, RMCResponse};
 
 #[derive(Copy, Clone)]
 pub struct AuthProtocolConfig {
