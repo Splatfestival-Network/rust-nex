@@ -1,6 +1,5 @@
 use std::io::Cursor;
 use std::sync::Arc;
-use log::info;
 use tokio::sync::{Mutex, RwLock};
 use crate::protocols::matchmake_common::MatchmakeData;
 use crate::prudp::socket::{ConnectionData, SocketData};

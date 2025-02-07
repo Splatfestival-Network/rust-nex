@@ -7,7 +7,6 @@ use rc4::consts::U16;
 use crate::endianness::{IS_BIG_ENDIAN, ReadExtensions};
 use crate::kerberos::{derive_key, TicketInternalData};
 use crate::nex::account::Account;
-use crate::prudp::packet::PRUDPHeader;
 use crate::prudp::socket::EncryptionPair;
 use crate::rmc::structures::RmcSerialize;
 

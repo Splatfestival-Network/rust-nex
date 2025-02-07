@@ -71,7 +71,7 @@ impl KerberosDateTime{
 
     #[inline]
     pub fn get_year(&self) -> u64{
-        ((self.0 >> 26) & 0xFFFFFFFF)
+        (self.0 >> 26) & 0xFFFFFFFF
     }
 
     pub fn to_regular_time(&self) -> chrono::DateTime<Utc>{

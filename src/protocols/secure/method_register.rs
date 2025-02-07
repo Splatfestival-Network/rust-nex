@@ -1,22 +1,19 @@
 use std::io::{Cursor, Write};
 use std::sync::Arc;
 use bytemuck::bytes_of;
-use log::{error, warn};
 use tokio::sync::Mutex;
-use crate::protocols::auth::AuthProtocolConfig;
 use crate::prudp::socket::{ConnectionData, SocketData};
 use crate::prudp::station_url::{nat_types, StationUrl};
 use crate::prudp::station_url::Type::PRUDPS;
 use crate::prudp::station_url::UrlOptions::{Address, NatFiltering, NatMapping, NatType, Port, PrincipalID, RVConnectionID};
 use crate::rmc::message::RMCMessage;
 use crate::rmc::response::{ErrorCode, RMCResponseResult};
-use crate::rmc::structures::any::Any;
 use crate::rmc::structures::qresult::QResult;
 use crate::rmc::structures::RmcSerialize;
 
 type StringList = Vec<String>;
 
-pub async fn register(rmcmessage: &RMCMessage, station_urls: Vec<StationUrl>, conn_data: &Arc<Mutex<ConnectionData>>) -> RMCResponseResult{
+pub async fn register(rmcmessage: &RMCMessage, _station_urls: Vec<StationUrl>, conn_data: &Arc<Mutex<ConnectionData>>) -> RMCResponseResult{
     let locked = conn_data.lock().await;
     let Some(active_connection_data) = locked.active_connection_data.as_ref() else {
         return rmcmessage.error_result_with_code(ErrorCode::RendezVous_NotAuthenticated)

@@ -6,7 +6,7 @@ use crate::protocols::matchmake_common::{ExtendedMatchmakeSession, MatchmakeData
 use crate::prudp::socket::{ConnectionData, SocketData};
 use crate::rmc::message::RMCMessage;
 use crate::rmc::response::{ErrorCode, RMCResponseResult};
-use crate::rmc::structures::matchmake::{AutoMatchmakeParam, MatchmakeSession};
+use crate::rmc::structures::matchmake::{AutoMatchmakeParam};
 use crate::rmc::structures::RmcSerialize;
 
 

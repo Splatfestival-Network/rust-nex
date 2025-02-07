@@ -72,7 +72,7 @@ impl RmcSerialize for bool{
         Ok(())
     }
 
-    fn deserialize(mut reader: &mut dyn Read) -> crate::rmc::structures::Result<Self> {
+    fn deserialize(reader: &mut dyn Read) -> crate::rmc::structures::Result<Self> {
         Ok(u8::deserialize(reader)? != 0)
     }
 }

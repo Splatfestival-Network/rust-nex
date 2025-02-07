@@ -1,7 +1,6 @@
 use std::io;
 use std::io::{Write};
 use std::mem::transmute;
-use std::time::Duration;
 use bytemuck::bytes_of;
 use crate::prudp::packet::{PRUDPPacket};
 use crate::prudp::packet::flags::{NEED_ACK, RELIABLE};

@@ -1,5 +1,4 @@
 use std::io::{Read, Write};
-use crate::endianness::{IS_BIG_ENDIAN, ReadExtensions};
 use crate::rmc::structures::RmcSerialize;
 
 impl<'a> RmcSerialize for &'a [u8]{
@@ -12,7 +11,7 @@ impl<'a> RmcSerialize for &'a [u8]{
     }
 
     /// DO NOT USE (also maybe split off the serialize and deserialize functions at some point)
-    fn deserialize(reader: &mut dyn Read) -> crate::rmc::structures::Result<Self> {
+    fn deserialize(_reader: &mut dyn Read) -> crate::rmc::structures::Result<Self> {
         panic!("cannot deserialize to a u8 slice reference (use this ONLY for writing)")
     }
 }

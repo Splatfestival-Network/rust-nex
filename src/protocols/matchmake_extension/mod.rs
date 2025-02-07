@@ -2,7 +2,7 @@ mod method_get_playing_session;
 mod method_auto_matchmake_with_param_postpone;
 
 use std::sync::Arc;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::{RwLock};
 use crate::define_protocol;
 use crate::protocols::matchmake_common::MatchmakeData;
 use method_get_playing_session::get_playing_session_raw_params;

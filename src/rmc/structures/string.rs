@@ -23,7 +23,7 @@ impl RmcSerialize for String{
 }
 
 impl RmcSerialize for &str{
-    fn deserialize(mut reader: &mut dyn Read) -> Result<Self> {
+    fn deserialize(_reader: &mut dyn Read) -> Result<Self> {
         panic!("cannot serialize to &str")
     }
     fn serialize(&self, writer: &mut dyn Write) -> Result<()> {
