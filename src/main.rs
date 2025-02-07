@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::sync::Arc;
-use chrono::Local;
+use chrono::{Local, SecondsFormat};
 use log::info;
 use once_cell::sync::Lazy;
 use rc4::{KeyInit, Rc4, StreamCipher};
@@ -82,7 +82,15 @@ async fn main() {
             TermLogger::new(LevelFilter::Info, Config::default(), TerminalMode::Mixed, ColorChoice::Auto),
             WriteLogger::new(LevelFilter::max(), Config::default(), {
                 fs::create_dir_all("log").unwrap();
-                File::create(format!("log/{}.log", Local::now().to_rfc2822())).unwrap()
+                let date = Local::now().to_rfc3339_opts(SecondsFormat::Secs, false);
+                // this fixes windows being windows
+                let date = date.replace(":", "-");
+                let filename = format!("{}.log", date);
+                if cfg!(windows) {
+                    File::create(format!("log\\{}", filename)).unwrap()
+                } else {
+                    File::create(format!("log/{}", filename)).unwrap()
+                }
             })
         ]
     ).unwrap();
