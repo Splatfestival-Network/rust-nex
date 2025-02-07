@@ -20,7 +20,7 @@ pub async fn send_report(rmcmessage: &RMCMessage, report_id: u32, data: Vec<u8>)
     return rmcmessage.success_with_data(Vec::new());
 }
 
-pub async fn send_report_raw_params(rmcmessage: &RMCMessage, _: &Arc<SocketData>, conn_data: &Arc<Mutex<ConnectionData>>, _: ()) -> RMCResponseResult{
+pub async fn send_report_raw_params(rmcmessage: &RMCMessage, _: &Arc<SocketData>, _conn_data: &Arc<Mutex<ConnectionData>>, _: ()) -> RMCResponseResult{
     let mut reader = Cursor::new(&rmcmessage.rest_of_data);
 
     let Ok(error_id) = reader.read_struct(IS_BIG_ENDIAN) else {

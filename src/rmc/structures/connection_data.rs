@@ -22,7 +22,7 @@ impl<'a> RmcSerialize for ConnectionData<'a>{
         })
     }
 
-    fn deserialize(reader: &mut dyn Read) -> crate::rmc::structures::Result<Self> {
+    fn deserialize(_reader: &mut dyn Read) -> crate::rmc::structures::Result<Self> {
         todo!()
     }
 }

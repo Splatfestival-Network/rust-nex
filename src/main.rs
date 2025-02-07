@@ -129,7 +129,7 @@ async fn start_auth_server() -> AuthServer{
                     async move {
 
 
-                        let encryption_pairs = Vec::from_iter((0..=count).map(|v| {
+                        let encryption_pairs = Vec::from_iter((0..=count).map(|_v| {
                             let rc4: Rc4<U5> = Rc4::new_from_slice( "CD&ML".as_bytes()).unwrap();
                             let cypher = Box::new(rc4);
                             let server_cypher: Box<dyn StreamCipher + Send> = cypher;

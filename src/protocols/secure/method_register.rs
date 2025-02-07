@@ -13,7 +13,7 @@ use crate::rmc::structures::RmcSerialize;
 
 type StringList = Vec<String>;
 
-pub async fn register(rmcmessage: &RMCMessage, station_urls: Vec<StationUrl>, conn_data: &Arc<Mutex<ConnectionData>>) -> RMCResponseResult{
+pub async fn register(rmcmessage: &RMCMessage, _station_urls: Vec<StationUrl>, conn_data: &Arc<Mutex<ConnectionData>>) -> RMCResponseResult{
     let locked = conn_data.lock().await;
     let Some(active_connection_data) = locked.active_connection_data.as_ref() else {
         return rmcmessage.error_result_with_code(ErrorCode::RendezVous_NotAuthenticated)

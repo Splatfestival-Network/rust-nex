@@ -10,7 +10,7 @@ use crate::rmc::structures::RmcSerialize;
 
 type PIDList = Vec<u32>;
 
-async fn get_playing_session(rmcmessage: &RMCMessage, data: Arc<RwLock<MatchmakeData>>) -> RMCResponseResult {
+async fn get_playing_session(rmcmessage: &RMCMessage, _data: Arc<RwLock<MatchmakeData>>) -> RMCResponseResult {
     //todo: propperly implement this
 
     let cheeseburger = PIDList::new();
