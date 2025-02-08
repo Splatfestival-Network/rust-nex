@@ -240,10 +240,16 @@ async fn start_secure_server() -> SecureServer{
 }
 
 async fn start_servers(){
+
+
+    #[cfg(feature = "auth")]
     let auth_server = start_auth_server().await;
+    #[cfg(feature = "secure")]
     let secure_server = start_secure_server().await;
 
+    #[cfg(feature = "auth")]
     auth_server.join_handle.await.expect("auth server crashed");
+    #[cfg(feature = "secure")]
     secure_server.join_handle.await.expect("auth server crashed");
 }
 
