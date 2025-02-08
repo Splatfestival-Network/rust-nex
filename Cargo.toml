@@ -28,3 +28,8 @@ macros = { path = "macros" }
 
 [build-dependencies]
 tonic-build = "0.12.3"
+
+[features]
+default = ["secure", "auth"]
+secure = []
+auth = []
