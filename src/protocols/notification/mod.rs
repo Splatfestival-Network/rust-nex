@@ -15,17 +15,19 @@ pub struct Notification{
     pub param_1: u32,
     pub param_2: u32,
     pub str_param: String,
+    pub param_3: u32,
 }
 
 impl ConnectionData{
     pub async fn send_notification(&mut self, socket: &SocketData, notif: Notification){
+        println!("sending notification");
 
         let mut data = Vec::new();
 
         notif.serialize(&mut data).expect("unable to write");
 
         let message = RMCMessage{
-            protocol_id: 0xE,
+            protocol_id: 14,
             method_id: 1,
             call_id: random(),
             rest_of_data: data
@@ -42,6 +44,8 @@ impl ConnectionData{
             payload: message.to_data(),
             packet_signature: [0;16]
         };
+
+
 
         self.finish_and_send_packet_to(socket, prudp_packet).await;
     }

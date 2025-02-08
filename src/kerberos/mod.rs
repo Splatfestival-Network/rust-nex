@@ -25,7 +25,7 @@ pub fn derive_key(pid: u32, password: [u8; 16]) -> [u8; 16]{
 
     key
 }
-#[derive(Pod, Zeroable, Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Pod, Zeroable, Copy, Clone, Debug, Eq, PartialEq, Default)]
 #[repr(transparent)]
 pub struct KerberosDateTime(pub u64);
 

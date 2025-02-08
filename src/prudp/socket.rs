@@ -1,4 +1,6 @@
+use log::info;
 use std::collections::{HashMap, VecDeque};
+use std::fmt::{Debug, Formatter};
 use std::future::Future;
 use std::ops::Deref;
 use std::pin::Pin;
@@ -29,6 +31,7 @@ pub struct Socket {
 type OnConnectHandlerFn = Box<dyn Fn(PRUDPPacket, u8) -> Pin<Box<dyn Future<Output=Option<(Vec<u8>, Vec<EncryptionPair>, Option<ActiveSecureConnectionData>)>> + Send>> + Send + Sync>;
 type OnDataHandlerFn = Box<dyn Fn(PRUDPPacket, Arc<SocketData>, Arc<Mutex<ConnectionData>>) -> Pin<Box<dyn Future<Output=()> + Send>> + Send + Sync>;
 
+#[derive(Debug)]
 pub struct ActiveSecureConnectionData {
     pub(crate) pid: u32,
     pub(crate) session_key: [u8; 32],
@@ -49,6 +52,13 @@ pub struct EncryptionPair{
     pub recv: Box<dyn StreamCipher + Send>
 }
 
+impl Debug for EncryptionPair{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Stubbed")
+    }
+}
+
+#[derive(Debug)]
 pub struct ActiveConnectionData {
     pub reliable_client_counter: u16,
     pub reliable_server_counter: u16,
@@ -60,6 +70,7 @@ pub struct ActiveConnectionData {
 }
 
 
+#[derive(Debug)]
 pub struct ConnectionData {
     pub sock_addr: PRUDPSockAddr,
     pub id: u64,
@@ -174,8 +185,8 @@ impl SocketData {
         // dont keep holding the connections list unnescesarily
         drop(connections);
 
+        let mutual_exclusion_packet_handeling_mtx = conn.1.lock().await;
         let mut connection = conn.0.lock().await;
-        //let _mutual_exclusion_packet_handeling_mtx = conn.1.lock().await;
 
         if (packet.header.types_and_flags.get_flags() & ACK) != 0 {
             //todo: handle acknowledgements and resending packets propperly
@@ -387,6 +398,8 @@ impl SocketData {
                     ..
                 } = &mut *connection;
 
+                info!("got ping");
+
                 if (packet.header.types_and_flags.get_flags() & NEED_ACK) != 0 {
                     let Some(active_connection) = active_connection_data.as_mut() else {
                         error!("got data packet on non active connection!");
@@ -438,6 +451,8 @@ impl SocketData {
             }
             _ => error!("unimplemented packet type: {}", packet.header.types_and_flags.get_types())
         }
+
+        drop(mutual_exclusion_packet_handeling_mtx)
     }
 }
 
@@ -458,6 +473,10 @@ impl ConnectionData{
 
             encryption.apply_keystream(&mut packet.payload);
         }
+
+        packet.header.session_id = self.active_connection_data.as_ref().map(|v| v.server_session_id).unwrap_or_default();
+
+
 
         packet.header.source_port = socket.virtual_port;
         packet.header.destination_port = self.sock_addr.virtual_port;
