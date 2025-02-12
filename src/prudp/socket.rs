@@ -195,7 +195,7 @@ impl SocketData {
         }
 
         if (packet.header.types_and_flags.get_flags() & MULTI_ACK) != 0 {
-            println!("got ack");
+            println!("got multi ack");
             return;
         }
 
@@ -458,6 +458,8 @@ impl SocketData {
 
 impl ConnectionData{
     pub async fn finish_and_send_packet_to(&mut self, socket: &SocketData, mut packet: PRUDPPacket){
+
+
         if (packet.header.types_and_flags.get_flags() & RELIABLE) != 0{
             let Some(active_connection) = self.active_connection_data.as_mut() else {
                 error!("tried to send a secure packet to an inactive connection");
@@ -491,7 +493,6 @@ impl ConnectionData{
 
 
         packet.calculate_and_assign_signature(socket.access_key, potential_session_key, Some(self.server_signature));
-
         let mut vec = Vec::new();
 
         packet.write_to(&mut vec).expect("somehow failed to convert backet to bytes");

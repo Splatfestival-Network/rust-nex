@@ -29,7 +29,9 @@ impl RMCProtocolServer{
         
         for proto in &self.0 {
             if let Some(response) = proto(&rmc, &socket, &connection).await {
-
+                if matches!(response.response_result, RMCResponseResult::Error {..}){
+                    error!("an rmc error occurred")
+                }
                 let mut locked = connection.lock().await;
                 send_response(&packet, &socket, &mut locked, response).await;
                 drop(locked);

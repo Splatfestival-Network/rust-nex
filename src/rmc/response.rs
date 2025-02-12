@@ -93,7 +93,7 @@ pub async fn send_response(original_packet: &PRUDPPacket, socket: &SocketData, c
     packet.header.types_and_flags.set_types(DATA);
     packet.header.types_and_flags.set_flag((original_packet.header.types_and_flags.get_flags() & RELIABLE) | NEED_ACK);
 
-    packet.header.session_id = active_connection.server_session_id;
+    //packet.header.session_id = active_connection.server_session_id;
     packet.header.substream_id = 0;
 
     packet.options.push(FragmentId(0));

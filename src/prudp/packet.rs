@@ -40,7 +40,7 @@ pub enum Error {
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[repr(transparent)]
-#[derive(Copy, Clone, Pod, Zeroable, SwapEndian, Default)]
+#[derive(Copy, Clone, Pod, Zeroable, SwapEndian, Default, Eq, PartialEq)]
 pub struct TypesFlags(u16);
 
 impl TypesFlags {
@@ -141,7 +141,7 @@ impl Debug for VirtualPort {
 }
 
 #[repr(C)]
-#[derive(Debug, Copy, Clone, Pod, Zeroable, SwapEndian)]
+#[derive(Debug, Copy, Clone, Pod, Zeroable, SwapEndian, Eq, PartialEq)]
 pub struct PRUDPHeader {
     pub magic: [u8; 2],
     pub version: u8,
@@ -173,7 +173,7 @@ impl Default for PRUDPHeader{
 }
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum PacketOption{
     SupportedFunctions(u32),
     ConnectionSignature([u8; 16]),
@@ -236,7 +236,7 @@ impl PacketOption{
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct PRUDPPacket {
     pub header: PRUDPHeader,
     pub packet_signature: [u8; 16],
@@ -290,8 +290,11 @@ impl PRUDPPacket {
 
 
         let packet_signature: [u8; 16] = reader.read_struct(IS_BIG_ENDIAN)?;
+        //let packet_signature: [u8; 16] = [0; 16];
 
         assert_eq!(reader.stream_position().ok(), Some(14 + 16));
+
+
 
         let mut packet_specific_buffer = vec![0u8; header.packet_specific_size as usize];
 
@@ -474,6 +477,8 @@ impl PRUDPPacket {
 
 #[cfg(test)]
 mod test {
+    use crate::prudp::packet::flags::{NEED_ACK, RELIABLE};
+    use crate::prudp::packet::types::DATA;
     use super::{OptionId, PacketOption, PRUDPHeader, TypesFlags, VirtualPort};
     #[test]
     fn size_test() {
@@ -522,5 +527,14 @@ mod test {
         let bytes = &bytes[0x6..];
 
         let header_data: [u8; 8] = bytes.try_into().unwrap();
+    }
+
+    #[test]
+    fn test_types_flags(){
+        let types = TypesFlags::default().types(DATA).flags(NEED_ACK | RELIABLE);
+
+        assert_ne!((types.0 >> 4) & NEED_ACK, 0);
+        assert_ne!((types.0 >> 4) & RELIABLE, 0);
+        assert_ne!((types.0 & 0xFF) as u8 & DATA, 0);
     }
 }

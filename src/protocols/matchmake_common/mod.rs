@@ -57,6 +57,7 @@ impl ExtendedMatchmakeSession{
                     ("@GIR".to_owned(), Variant::SInt64(3))
                 ]
             },
+            system_password_enabled: false,
             ..session
         };
 

@@ -1,5 +1,6 @@
 use std::io::Cursor;
 use std::sync::Arc;
+use log::info;
 use tokio::sync::{Mutex, RwLock};
 use crate::protocols::matchmake_common::{add_matchmake_session, ExtendedMatchmakeSession, MatchmakeData};
 use crate::protocols::matchmake_extension::method_auto_matchmake_with_param_postpone::auto_matchmake_with_param_postpone;
@@ -16,15 +17,6 @@ pub async fn create_matchmake_session_with_param(
     mm_data: Arc<RwLock<MatchmakeData>>,
     create_matchmake_session: CreateMatchmakeSessionParam
 ) -> RMCResponseResult {
-    let locked_conn = conn.lock().await;
-    let Some(secure_conn) =
-        locked_conn.active_connection_data.as_ref().map(|a| a.active_secure_connection_data.as_ref()).flatten() else {
-        return rmcmessage.error_result_with_code(ErrorCode::Core_Exception);
-    };
-
-    println!("{:?}", create_matchmake_session);
-
-    let pid = secure_conn.pid;
 
     let mut session =
         ExtendedMatchmakeSession::from_matchmake_session(create_matchmake_session.matchmake_session, &conn).await;
@@ -37,7 +29,10 @@ pub async fn create_matchmake_session_with_param(
 
     session.add_player(&socket, conn.clone(), create_matchmake_session.join_message).await;
 
+    println!("{:?}", session);
+
     let mut response = Vec::new();
+
 
     session.session.serialize(&mut response).expect("unable to serialize session");
 

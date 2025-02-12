@@ -64,11 +64,9 @@ static OWN_IP_PRIVATE: Lazy<Ipv4Addr> = Lazy::new(||{
         .expect("no public ip specified")
 });
 
-static OWN_IP_PUBLIC: Lazy<Ipv4Addr> = Lazy::new(||{
+static OWN_IP_PUBLIC: Lazy<String> = Lazy::new(||{
     env::var("SERVER_IP_PUBLIC")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(*OWN_IP_PRIVATE)
+        .unwrap_or(OWN_IP_PRIVATE.to_string())
 });
 
 static SECURE_STATION_URL: Lazy<String> = Lazy::new(||
@@ -194,7 +192,8 @@ async fn start_secure_server() -> SecureServer{
         Box::new(block_if_maintenance),
         Box::new(protocols::secure::bound_protocol()),
         Box::new(protocols::matchmake::bound_protocol(matchmake_data.clone())),
-        Box::new(protocols::matchmake_extension::bound_protocol(matchmake_data))
+        Box::new(protocols::matchmake_extension::bound_protocol(matchmake_data)),
+        Box::new(protocols::nat_traversal::bound_protocol())
     ]));
 
     let socket =
