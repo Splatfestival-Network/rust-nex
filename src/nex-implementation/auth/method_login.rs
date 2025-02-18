@@ -3,7 +3,6 @@ use std::sync::Arc;
 use log::error;
 use tokio::sync::Mutex;
 use crate::protocols::auth::AuthProtocolConfig;
-use crate::prudp::socket::{ConnectionData, SocketData};
 use crate::rmc::message::RMCMessage;
 use crate::rmc::response::{ErrorCode, RMCResponseResult};
 use crate::rmc::structures::RmcSerialize;

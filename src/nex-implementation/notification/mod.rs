@@ -3,7 +3,6 @@ use rand::random;
 use crate::prudp::packet::{PRUDPHeader, PRUDPPacket, PacketOption, TypesFlags};
 use crate::prudp::packet::flags::{NEED_ACK, RELIABLE};
 use crate::prudp::packet::types::DATA;
-use crate::prudp::socket::{ConnectionData, SocketData};
 use crate::rmc::message::RMCMessage;
 use crate::rmc::structures::RmcSerialize;
 
@@ -30,10 +29,11 @@ impl ConnectionData{
         let message = RMCMessage{
             protocol_id: 14,
             method_id: 1,
-            call_id: random(),
+            call_id: 1,
             rest_of_data: data
         };
 
+        println!("notif: {}", hex::encode(message.to_data()));
 
 
         let mut prudp_packet = PRUDPPacket{
@@ -91,23 +91,6 @@ mod test{
         //println!("{:?}", packet);
 
         let rmc = RMCMessage::new(&mut Cursor::new(data)).expect("invalid rmc message");
-
-        println!("{:?}", rmc);
-
-        let notif = Notification::deserialize(&mut Cursor::new(rmc.rest_of_data)).expect("invalid notification");
-
-        println!("{:?}", notif);
-    }
-
-    #[test]
-    fn test3(){
-
-        let data = hex::decode("ead001032900a1af620084000300020100250000008e0100000001000000001700000051b39957b90b00000100000051b399570100000100000000000000000000000000000000000000").unwrap();
-        let packet = PRUDPPacket::new(&mut Cursor::new(data)).expect("invalid packet");
-
-        println!("{:?}", packet);
-
-        let rmc = RMCMessage::new(&mut Cursor::new(packet.payload)).expect("invalid rmc message");
 
         println!("{:?}", rmc);
 

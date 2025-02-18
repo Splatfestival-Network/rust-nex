@@ -1,10 +1,11 @@
 use std::io::Cursor;
 use std::sync::Arc;
+use std::time::Duration;
 use log::info;
 use tokio::sync::{Mutex, RwLock};
+use tokio::time::sleep;
 use crate::protocols::matchmake_common::{add_matchmake_session, ExtendedMatchmakeSession, MatchmakeData};
 use crate::protocols::matchmake_extension::method_auto_matchmake_with_param_postpone::auto_matchmake_with_param_postpone;
-use crate::prudp::socket::{ConnectionData, SocketData};
 use crate::rmc::message::RMCMessage;
 use crate::rmc::response::{ErrorCode, RMCResponseResult};
 use crate::rmc::structures::matchmake::{AutoMatchmakeParam, CreateMatchmakeSessionParam};
@@ -29,12 +30,16 @@ pub async fn create_matchmake_session_with_param(
 
     session.add_player(&socket, conn.clone(), create_matchmake_session.join_message).await;
 
-    println!("{:?}", session);
+
 
     let mut response = Vec::new();
 
 
     session.session.serialize(&mut response).expect("unable to serialize session");
+
+    println!("{}", hex::encode(&response));
+    
+    
 
     rmcmessage.success_with_data(response)
 }
@@ -51,7 +56,32 @@ pub async fn create_matchmake_session_with_param_raw_params(
         return rmcmessage.error_result_with_code(ErrorCode::Core_InvalidArgument);
     };
 
-
-
     create_matchmake_session_with_param(rmcmessage, connection_data, socket, data, matchmake_param).await
+}
+
+#[cfg(test)]
+mod test{
+    use std::io::Cursor;
+    use crate::prudp::packet::PRUDPPacket;
+    use crate::rmc::message::RMCMessage;
+    use crate::rmc::structures::matchmake::MatchmakeSession;
+    use crate::rmc::structures::RmcSerialize;
+
+    #[test]
+    fn test(){
+        let data = hex::decode("ead001030000a1af12001800050002010000000000000000000000000000000000").unwrap();
+
+        let packet = PRUDPPacket::new(&mut Cursor::new(data)).unwrap();
+
+        println!("{:?}", packet);
+    }
+
+    #[test]
+    fn test_2(){
+        let data = hex::decode("250000008e0100000001000000001700000051b39957b90b00000100000051b3995701000001000000").unwrap();
+
+        let msg = RMCMessage::new(&mut Cursor::new(data)).unwrap();
+
+        println!("{:?}", msg)
+    }
 }

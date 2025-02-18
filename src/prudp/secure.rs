@@ -73,12 +73,12 @@ pub fn read_secure_connection_data(data: &[u8], act: &Account) -> Option<([u8; 3
 
 type Rc4U32 = StreamCipherCoreWrapper<Rc4Core<U32>>;
 
-pub fn generate_secure_encryption_pairs(mut session_key: [u8; 32], count: u8) -> Vec<EncryptionPair>{
+pub fn generate_secure_encryption_pairs(mut session_key: [u8; 32], count: u8) -> Vec<EncryptionPair<Rc4<U32>>>{
     let mut vec = Vec::with_capacity(count as usize);
 
     vec.push(EncryptionPair{
-        send: Box::new(Rc4U32::new_from_slice(&session_key).expect("unable to create rc4")),
-        recv: Box::new(Rc4U32::new_from_slice(&session_key).expect("unable to create rc4"))
+        send: Rc4U32::new_from_slice(&session_key).expect("unable to create rc4"),
+        recv: Rc4U32::new_from_slice(&session_key).expect("unable to create rc4")
     });
 
     for _ in 1..=count{
@@ -91,8 +91,8 @@ pub fn generate_secure_encryption_pairs(mut session_key: [u8; 32], count: u8) ->
         }
 
         vec.push(EncryptionPair{
-            send: Box::new(Rc4U32::new_from_slice(&session_key).expect("unable to create rc4")),
-            recv: Box::new(Rc4U32::new_from_slice(&session_key).expect("unable to create rc4"))
+            send: Rc4U32::new_from_slice(&session_key).expect("unable to create rc4"),
+            recv: Rc4U32::new_from_slice(&session_key).expect("unable to create rc4")
         });
     }
 

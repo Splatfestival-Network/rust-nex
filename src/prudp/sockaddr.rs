@@ -5,14 +5,24 @@ use crate::prudp::packet::VirtualPort;
 
 type Md5Hmac = Hmac<md5::Md5>;
 
-#[derive(Eq, PartialEq, Hash, Debug, Copy, Clone)]
+#[derive(Eq, PartialEq, Hash, Debug, Copy, Clone, Ord, PartialOrd)]
 pub struct PRUDPSockAddr{
     pub regular_socket_addr: SocketAddrV4,
     pub virtual_port: VirtualPort
 }
 
+
+
 impl PRUDPSockAddr{
-    pub fn calculate_connection_signature(&self) -> [u8; 16] {
+
+    pub fn new(regular_socket_addr: SocketAddrV4, virtual_port: VirtualPort) -> Self{
+        Self{
+            regular_socket_addr,
+            virtual_port
+        }
+    }
+
+    pub(super) fn calculate_connection_signature(&self) -> [u8; 16] {
         let mut hmac = Md5Hmac::new_from_slice(&[0; 16]).expect("fuck");
 
         let mut data = self.regular_socket_addr.ip().octets().to_vec();

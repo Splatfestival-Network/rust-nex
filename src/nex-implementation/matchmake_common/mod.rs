@@ -5,7 +5,6 @@ use rand::random;
 use tokio::sync::{Mutex, RwLock};
 use crate::kerberos::KerberosDateTime;
 use crate::protocols::notification::Notification;
-use crate::prudp::socket::{ActiveConnectionData, ConnectionData, SocketData};
 use crate::rmc::structures::matchmake::{Gathering, MatchmakeParam, MatchmakeSession};
 use crate::rmc::structures::variant::Variant;
 
@@ -44,7 +43,7 @@ impl ExtendedMatchmakeSession{
 
         let mm_session = MatchmakeSession{
             gathering: Gathering{
-                self_gid: random(),
+                self_gid: 1,
                 owner_pid: active_secure_connection_data.pid,
                 host_pid: active_secure_connection_data.pid,
                 ..session.gathering.clone()

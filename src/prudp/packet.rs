@@ -96,10 +96,11 @@ impl Debug for TypesFlags {
 }
 
 #[repr(transparent)]
-#[derive(PartialEq, Eq, Copy, Clone, Pod, Zeroable, SwapEndian, Hash)]
+#[derive(PartialEq, Eq, Ord, PartialOrd, Copy, Clone, Pod, Zeroable, SwapEndian, Hash)]
 pub struct VirtualPort(pub(crate) u8);
 
 impl VirtualPort {
+
     #[inline]
     pub const fn get_stream_type(self) -> u8 {
         (self.0 & 0xF0) >> 4
@@ -236,7 +237,7 @@ impl PacketOption{
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Default, Clone, Eq, PartialEq)]
 pub struct PRUDPPacket {
     pub header: PRUDPHeader,
     pub packet_signature: [u8; 16],
@@ -375,6 +376,7 @@ impl PRUDPPacket {
                 types_and_flags: flags,
                 sequence_id: self.header.sequence_id,
                 substream_id: self.header.substream_id,
+                session_id: self.header.session_id,
                 ..base.header
             },
             options,

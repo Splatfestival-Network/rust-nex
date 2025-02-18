@@ -30,6 +30,7 @@ pub mod qbuffer;
 pub mod primitives;
 pub mod matchmake;
 pub mod variant;
+mod ranking;
 
 pub trait RmcSerialize: Sized{
     fn serialize(&self, writer: &mut dyn Write) -> Result<()>;

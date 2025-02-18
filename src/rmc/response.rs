@@ -6,8 +6,10 @@ use crate::prudp::packet::{PRUDPPacket};
 use crate::prudp::packet::flags::{NEED_ACK, RELIABLE};
 use crate::prudp::packet::PacketOption::FragmentId;
 use crate::prudp::packet::types::DATA;
-use crate::prudp::socket::{ConnectionData, SocketData};
+use crate::prudp::socket::ExternalConnection;
 use crate::rmc::structures::qresult::ERROR_MASK;
+use crate::web::DirectionalData::{Incoming, Outgoing};
+use crate::web::WEB_DATA;
 
 pub enum RMCResponseResult {
     Success{
@@ -76,33 +78,8 @@ pub fn generate_response(protocol_id: u8, response: RMCResponseResult) -> io::Re
 
     Ok(data_out)
 }
-pub async fn send_response(original_packet: &PRUDPPacket, socket: &SocketData, connection: &mut ConnectionData, rmcresponse: RMCResponse){
-
-    let ConnectionData{
-        active_connection_data,
-        ..
-    } = connection;
-
-    let Some(active_connection) = active_connection_data else {
-        return;
-    };
-
-    let mut packet = original_packet.base_response_packet();
-
-
-    packet.header.types_and_flags.set_types(DATA);
-    packet.header.types_and_flags.set_flag((original_packet.header.types_and_flags.get_flags() & RELIABLE) | NEED_ACK);
-
-    //packet.header.session_id = active_connection.server_session_id;
-    packet.header.substream_id = 0;
-
-    packet.options.push(FragmentId(0));
-
-    packet.payload = rmcresponse.to_data();
-
-    //tokio::time::sleep(Duration::from_millis(500)).await;
-
-    connection.finish_and_send_packet_to(socket, packet).await;
+pub async fn send_response(original_packet: &PRUDPPacket, connection: &mut ExternalConnection, rmcresponse: RMCResponse){
+    connection.send(rmcresponse.to_data()).await;
 }
 
 //taken from kinnays error list directly

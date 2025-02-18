@@ -7,7 +7,6 @@ use rand::random;
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::sleep;
 use crate::protocols::matchmake_common::{ExtendedMatchmakeSession, MatchmakeData};
-use crate::prudp::socket::{ConnectionData, SocketData};
 use crate::rmc::message::RMCMessage;
 use crate::rmc::response::{ErrorCode, RMCResponseResult};
 use crate::rmc::structures::matchmake::{AutoMatchmakeParam, MatchmakeSession};

@@ -36,3 +36,4 @@ impl RmcSerialize for &str{
         Ok(())
     }
 }
+
