@@ -4,6 +4,8 @@ WORKDIR /app
 
 COPY . .
 
+RUN apt install protobuf-compiler
+
 RUN cargo build --release
 
 FROM rust:1.85 AS final
