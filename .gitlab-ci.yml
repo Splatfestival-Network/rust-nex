@@ -1,0 +1,21 @@
+image: docker:latest 
+
+variables:
+  IMAGE_NAME: "ci.perditum.com/perditum/rnex-splatoon"
+  IMAGE_TAG: "${CI_COMMIT_REF_SLUG}"
+
+before_script:
+  - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" ci.perditum.com
+
+stages:
+  - build-and-push
+
+build-and-push:
+  stage: build-and-push
+  script:
+    - docker build -t "$IMAGE_NAME:$IMAGE_TAG" .
+    - docker tag "$IMAGE_NAME:$IMAGE_TAG" "$IMAGE_NAME:latest"
+    - docker push "$IMAGE_NAME:$IMAGE_TAG"
+    - docker push "$IMAGE_NAME:latest"
+  only:
+    - main
