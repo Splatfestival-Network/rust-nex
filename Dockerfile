@@ -6,6 +6,8 @@ COPY . .
 
 RUN apt-get update && apt-get install protobuf-compiler -y
 
+RUN which protoc
+
 RUN cargo build --release
 
 FROM rust:1.85 AS final
