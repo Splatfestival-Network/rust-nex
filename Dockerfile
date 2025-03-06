@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY . .
 
-RUN apt install protobuf-compiler
+RUN apt-get update && apt-get install protobuf-compiler
 
 RUN cargo build --release
 
