@@ -6,7 +6,7 @@ COPY . .
 
 RUN apt-get update && apt-get install protobuf-compiler -y
 
-RUN which protoc
+RUN git submodule update --init --recursive
 
 RUN cargo build --release
 
