@@ -11,10 +11,11 @@ use tokio::sync::{Mutex, Notify};
 use tokio::time::{sleep_until, Instant};
 use crate::prudp::socket::{ExternalConnection, SendingConnection};
 use crate::rmc::structures::connection_data::ConnectionData;
+use crate::rmc::structures::matchmake::AutoMatchmakeParam;
 
-struct RmcConnection(SendingConnection, RmcResponseReceiver);
+pub struct RmcConnection(pub SendingConnection, pub RmcResponseReceiver);
 
-struct RmcResponseReceiver(Notify, Mutex<HashMap<(u16, u32), Vec<u8>>>);
+pub struct RmcResponseReceiver(Notify, Mutex<HashMap<(u16, u32), Vec<u8>>>);
 
 impl RmcResponseReceiver{
     // returns none if timed out
@@ -48,9 +49,21 @@ impl RmcResponseReceiver{
     }
 }
 
+pub trait RemoteObject{
+    fn new(conn: RmcConnection) -> Self;
+}
+
+impl RemoteObject for (){
+    fn new(_: RmcConnection) -> Self {}
+}
+
 pub trait RmcCallable{
+    //type Remote: RemoteObject;
+    //fn new_callable(remote: Self::Remote);
     async fn rmc_call(&self, protocol_id: u16, method_id: u32, rest: Vec<u8>);
 }
+
+
 
 
 macro_rules! define_rmc_proto {
@@ -58,7 +71,7 @@ macro_rules! define_rmc_proto {
         $($protocol:path),*
     }) => {
         paste!{
-            trait [<Local $name>]: std::any::Any $( + [<Raw $protocol>])* {
+            trait [<Local $name>]: std::any::Any $( + [<Raw $protocol>] + $protocol)* {
                 async fn rmc_call(&self, protocol_id: u16, method_id: u32, rest: Vec<u8>){
                     match protocol_id{
                         $(
@@ -77,16 +90,21 @@ trait RawNotif{
 
     }
 }
+trait Notif{
+
+}
 
 struct RawNotifInfo;
 impl RawNotifInfo{
     const PROTOCOL_ID: u16 = 10;
 }
 
-#[rmc_proto(1)]
+pub trait ImplementRemoteCalls{}
+
+#[rmc_proto(1, NoReturn)]
 pub trait Another{
     #[method_id(1)]
-    async fn test();
+    async fn test(&self, thing: AutoMatchmakeParam);
 }
 
 define_rmc_proto!{
@@ -100,6 +118,12 @@ define_rmc_proto!{
 
 #[rmc_struct(TestProto)]
 struct TestProtoImplementor{
+    
+}
+
+
+
+impl Notif for TestProtoImplementor{
 
 }
 
@@ -107,3 +131,10 @@ impl RawNotif for TestProtoImplementor{
 
 }
 
+impl Another for TestProtoImplementor{
+    async fn test(&self, thing: AutoMatchmakeParam) {
+
+    }
+}
+
+impl ImplementRemoteCalls for TestProtoImplementor{}

@@ -514,9 +514,9 @@ pub struct NewEncryptionPair<E: StreamCipher> {
 
 pub struct CommonConnection {
     pub user_id: u32,
-    session_id: u8,
     pub socket_addr: PRUDPSockAddr,
-    pub server_port: VirtualPort
+    pub server_port: VirtualPort,
+    session_id: u8,
 }
 
 struct InternalConnection<E: CryptoHandlerConnectionInstance> {
@@ -669,6 +669,8 @@ impl<T: CryptoHandler> InternalSocket<T> {
         packet
             .write_to(&mut vec)
             .expect("somehow failed to convert backet to bytes");
+
+        println!("{}", hex::encode(&vec));
 
         self.socket
             .send_to(&vec, dest.regular_socket_addr)
