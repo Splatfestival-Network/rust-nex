@@ -1,24 +1,24 @@
 #![allow(dead_code)]
+#![warn(missing_docs)]
+
+//! # Splatoon RNEX server
+//! 
+//! This server still includes the code for rnex itself as this is the first rnex server and thus 
+//! also the first and only current usage of rnex, expect this and rnex to be split into seperate 
+//! repos soon.
 
 use std::{env, fs};
-use std::collections::BTreeMap;
 use std::fs::File;
 use std::net::{Ipv4Addr, SocketAddrV4};
-use std::sync::Arc;
 use chrono::{Local, SecondsFormat};
 use log::info;
 use once_cell::sync::Lazy;
-use rc4::{KeyInit, Rc4, StreamCipher};
-use rc4::consts::U5;
 use simplelog::{ColorChoice, CombinedLogger, Config, LevelFilter, TerminalMode, TermLogger, WriteLogger};
-use tokio::sync::RwLock;
-use tokio::task::JoinHandle;
 use crate::nex::account::Account;
-use crate::prudp::socket::{EncryptionPair, Unsecure};
+use crate::prudp::socket::Unsecure;
 use crate::prudp::packet::{VirtualPort};
 use crate::prudp::router::Router;
 use crate::prudp::sockaddr::PRUDPSockAddr;
-use crate::prudp::station_url::Type::PRUDP;
 
 mod endianness;
 mod prudp;
@@ -234,6 +234,18 @@ async fn start_secure_server() -> SecureServer{
         socket,
     }
 }*/
+/*
+define_rmc_proto!(
+    proto AuthClientProtocol{
+        Auth
+    }
+);*/
+
+
+//#[rmc_struct(AuthClientProtocol)]
+struct AuthClient{
+
+}
 
 async fn start_servers(){
 

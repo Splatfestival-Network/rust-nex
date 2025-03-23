@@ -6,41 +6,42 @@ use crate::prudp::packet::{PRUDPPacket};
 use crate::prudp::packet::flags::{NEED_ACK, RELIABLE};
 use crate::prudp::packet::PacketOption::FragmentId;
 use crate::prudp::packet::types::DATA;
-use crate::prudp::socket::ExternalConnection;
+use crate::prudp::socket::{ExternalConnection, SendingConnection};
 use crate::rmc::structures::qresult::ERROR_MASK;
+use crate::rmc::structures::RmcSerialize;
 use crate::web::DirectionalData::{Incoming, Outgoing};
 use crate::web::WEB_DATA;
 
 pub enum RMCResponseResult {
-    Success{
+    Success {
         call_id: u32,
         method_id: u32,
         data: Vec<u8>,
     },
-    Error{
+    Error {
         error_code: ErrorCode,
         call_id: u32,
-    }
+    },
 }
 
 pub struct RMCResponse {
     pub protocol_id: u8,
-    pub response_result: RMCResponseResult
+    pub response_result: RMCResponseResult,
 }
 
 impl RMCResponse {
-    pub fn to_data(self) -> Vec<u8>{
+    pub fn to_data(self) -> Vec<u8> {
         generate_response(self.protocol_id, self.response_result).expect("failed to generate response")
     }
 }
 
-pub fn generate_response(protocol_id: u8, response: RMCResponseResult) -> io::Result<Vec<u8>>{
-    let size = 1 + 1 + match &response{
+pub fn generate_response(protocol_id: u8, response: RMCResponseResult) -> io::Result<Vec<u8>> {
+    let size = 1 + 1 + match &response {
         RMCResponseResult::Success {
             data,
             ..
         } => 4 + 4 + data.len(),
-        RMCResponseResult::Error{..} => 4 + 4,
+        RMCResponseResult::Error { .. } => 4 + 4,
     };
 
     let mut data_out = Vec::with_capacity(size + 4);
@@ -50,7 +51,7 @@ pub fn generate_response(protocol_id: u8, response: RMCResponseResult) -> io::Re
     data_out.write_all(bytes_of(&u32_size))?;
     data_out.push(protocol_id);
 
-    match response{
+    match response {
         RMCResponseResult::Success {
             call_id,
             method_id,
@@ -61,7 +62,7 @@ pub fn generate_response(protocol_id: u8, response: RMCResponseResult) -> io::Re
             let ored_method_id = method_id | 0x8000;
             data_out.write_all(bytes_of(&ored_method_id))?;
             data_out.write_all(&data)?;
-        },
+        }
         RMCResponseResult::Error {
             call_id,
             error_code
@@ -78,9 +79,43 @@ pub fn generate_response(protocol_id: u8, response: RMCResponseResult) -> io::Re
 
     Ok(data_out)
 }
-pub async fn send_response(original_packet: &PRUDPPacket, connection: &mut ExternalConnection, rmcresponse: RMCResponse){
+
+pub async fn send_result(
+    connection: &SendingConnection,
+    result: Result<Vec<u8>, ErrorCode>,
+    protocol_id: u8,
+    method_id: u32,
+    call_id: u32,
+) {
+    let response_result = match result {
+        Ok(v) => RMCResponseResult::Success {
+            call_id,
+            method_id,
+            data: {
+                let mut vec = Vec::new();
+                v.serialize(&mut vec).expect("serialization error");
+                vec
+            }
+        },
+        Err(e) =>
+            RMCResponseResult::Error {
+                call_id,
+                error_code: e.into()
+            }
+    };
+
+    let response = RMCResponse{
+        response_result,
+        protocol_id
+    };
+
+    send_response(connection, response).await
+}
+
+pub async fn send_response(connection: &SendingConnection, rmcresponse: RMCResponse) {
     connection.send(rmcresponse.to_data()).await;
 }
+
 
 //taken from kinnays error list directly
 #[allow(nonstandard_style)]
@@ -356,25 +391,25 @@ pub enum ErrorCode {
     Custom_Unknown = 0x00740001,
     Ess_Unknown = 0x00750001,
     Ess_GameSessionError = 0x00750002,
-    Ess_GameSessionMaintenance = 0x00750003
+    Ess_GameSessionMaintenance = 0x00750003,
 }
 
-impl Into<u32> for ErrorCode  {
+impl Into<u32> for ErrorCode {
     fn into(self) -> u32 {
-        unsafe{ transmute(self) }
+        unsafe { transmute(self) }
     }
 }
 
 #[cfg(test)]
-mod test{
+mod test {
     use hmac::digest::consts::U5;
     use hmac::digest::KeyInit;
     use rc4::{Rc4, StreamCipher};
     use crate::rmc::response::ErrorCode;
 
     #[test]
-    fn test(){
-        let mut data_orig = [0,1,2,3,4,5,6,7,8,9,69,4,20];
+    fn test() {
+        let mut data_orig = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 69, 4, 20];
         let mut data = data_orig;
 
         let mut rc4: Rc4<U5> =
@@ -390,11 +425,10 @@ mod test{
         rc4.apply_keystream(&mut data);
 
         assert_eq!(data_orig, data);
-
     }
 
     #[test]
-    fn test_enum_equivilance(){
+    fn test_enum_equivilance() {
         let val: u32 = ErrorCode::Core_Unknown.into();
         assert_eq!(val, 0x00010001)
     }
