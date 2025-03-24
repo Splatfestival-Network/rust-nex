@@ -3,6 +3,7 @@ use bytemuck::bytes_of;
 use crate::kerberos::KerberosDateTime;
 use crate::rmc::structures::{rmc_struct, RmcSerialize};
 
+#[derive(Debug)]
 pub struct ConnectionData<'a>{
     pub station_url: &'a str,
     pub special_protocols: Vec<u8>,

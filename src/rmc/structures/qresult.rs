@@ -7,7 +7,7 @@ use crate::rmc::structures::{RmcSerialize, Result};
 
 pub const ERROR_MASK: u32 =  1 << 31;
 
-#[derive(Pod, Zeroable, Copy, Clone, SwapEndian)]
+#[derive(Pod, Zeroable, Copy, Clone, SwapEndian, Debug)]
 #[repr(transparent)]
 pub struct QResult(u32);
 

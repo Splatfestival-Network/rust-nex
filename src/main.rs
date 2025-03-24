@@ -2,92 +2,115 @@
 #![warn(missing_docs)]
 
 //! # Splatoon RNEX server
-//! 
-//! This server still includes the code for rnex itself as this is the first rnex server and thus 
-//! also the first and only current usage of rnex, expect this and rnex to be split into seperate 
+//!
+//! This server still includes the code for rnex itself as this is the first rnex server and thus
+//! also the first and only current usage of rnex, expect this and rnex to be split into seperate
 //! repos soon.
 
-use std::{env, fs};
-use std::fs::File;
-use std::net::{Ipv4Addr, SocketAddrV4};
+use crate::rmc::protocols::auth::RemoteAuth;
+use crate::rmc::protocols::auth::RawAuthInfo;
+use crate::rmc::protocols::auth::RawAuth;
+use crate::nex::account::Account;
+use crate::prudp::packet::VirtualPort;
+use crate::prudp::router::Router;
+use crate::prudp::sockaddr::PRUDPSockAddr;
+use crate::prudp::socket::Unsecure;
 use chrono::{Local, SecondsFormat};
 use log::info;
 use once_cell::sync::Lazy;
-use simplelog::{ColorChoice, CombinedLogger, Config, LevelFilter, TerminalMode, TermLogger, WriteLogger};
-use crate::nex::account::Account;
-use crate::prudp::socket::Unsecure;
-use crate::prudp::packet::{VirtualPort};
-use crate::prudp::router::Router;
-use crate::prudp::sockaddr::PRUDPSockAddr;
+use simplelog::{
+    ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode, WriteLogger,
+};
+use std::fs::File;
+use std::net::{Ipv4Addr, SocketAddrV4};
+use std::{env, fs};
+use std::marker::PhantomData;
+use std::ops::{BitAnd, BitOr};
+use std::str::FromStr;
+use macros::rmc_struct;
+use crate::rmc::protocols::auth::Auth;
+use crate::rmc::protocols::{new_rmc_gateway_connection, OnlyRemote};
+use crate::rmc::response::ErrorCode;
+use crate::rmc::structures::any::Any;
+use crate::rmc::structures::connection_data::ConnectionData;
+use crate::rmc::structures::qresult::QResult;
 
 mod endianness;
 mod prudp;
 pub mod rmc;
 //mod protocols;
 
-mod nex;
 mod grpc;
 mod kerberos;
+mod nex;
 mod web;
+mod versions;
+mod result;
 
-static KERBEROS_SERVER_PASSWORD: Lazy<String> = Lazy::new(||{
+static KERBEROS_SERVER_PASSWORD: Lazy<String> = Lazy::new(|| {
     env::var("AUTH_SERVER_PASSWORD")
         .ok()
         .unwrap_or("password".to_owned())
 });
 
+static AUTH_SERVER_ACCOUNT: Lazy<Account> =
+    Lazy::new(|| Account::new(1, "Quazal Authentication", &KERBEROS_SERVER_PASSWORD));
+static SECURE_SERVER_ACCOUNT: Lazy<Account> =
+    Lazy::new(|| Account::new(2, "Quazal Rendez-Vous", &KERBEROS_SERVER_PASSWORD));
 
-static AUTH_SERVER_ACCOUNT: Lazy<Account> = Lazy::new(|| Account::new(1, "Quazal Authentication", &KERBEROS_SERVER_PASSWORD));
-static SECURE_SERVER_ACCOUNT: Lazy<Account> = Lazy::new(|| Account::new(2, "Quazal Rendez-Vous", &KERBEROS_SERVER_PASSWORD));
-
-static AUTH_SERVER_PORT: Lazy<u16> = Lazy::new(||{
+static AUTH_SERVER_PORT: Lazy<u16> = Lazy::new(|| {
     env::var("AUTH_SERVER_PORT")
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(10000)
 });
-static SECURE_SERVER_PORT: Lazy<u16> = Lazy::new(||{
+static SECURE_SERVER_PORT: Lazy<u16> = Lazy::new(|| {
     env::var("SECURE_SERVER_PORT")
         .ok()
         .and_then(|s| s.parse().ok())
-        .unwrap_or(10001)
+        .unwrap_or(10002)
 });
 
-static OWN_IP_PRIVATE: Lazy<Ipv4Addr> = Lazy::new(||{
+static OWN_IP_PRIVATE: Lazy<Ipv4Addr> = Lazy::new(|| {
     env::var("SERVER_IP")
         .ok()
         .and_then(|s| s.parse().ok())
         .expect("no public ip specified")
 });
 
-static OWN_IP_PUBLIC: Lazy<String> = Lazy::new(||{
-    env::var("SERVER_IP_PUBLIC")
-        .unwrap_or(OWN_IP_PRIVATE.to_string())
-});
+static OWN_IP_PUBLIC: Lazy<String> =
+    Lazy::new(|| env::var("SERVER_IP_PUBLIC").unwrap_or(OWN_IP_PRIVATE.to_string()));
 
-static SECURE_STATION_URL: Lazy<String> = Lazy::new(||
-    format!("prudps:/PID=2;sid=1;stream=10;type=2;address={};port={};CID=1", *OWN_IP_PUBLIC, *SECURE_SERVER_PORT)
-);
+static SECURE_STATION_URL: Lazy<String> = Lazy::new(|| {
+    format!(
+        "prudps:/PID=2;sid=1;stream=10;type=2;address={};port={};CID=1",
+        *OWN_IP_PUBLIC, *SECURE_SERVER_PORT
+    )
+});
 
 #[tokio::main]
 async fn main() {
-    CombinedLogger::init(
-        vec![
-            TermLogger::new(LevelFilter::Info, Config::default(), TerminalMode::Mixed, ColorChoice::Auto),
-            WriteLogger::new(LevelFilter::max(), Config::default(), {
-                fs::create_dir_all("log").unwrap();
-                let date = Local::now().to_rfc3339_opts(SecondsFormat::Secs, false);
-                // this fixes windows being windows
-                let date = date.replace(":", "-");
-                let filename = format!("{}.log", date);
-                if cfg!(windows) {
-                    File::create(format!("log\\{}", filename)).unwrap()
-                } else {
-                    File::create(format!("log/{}", filename)).unwrap()
-                }
-            })
-        ]
-    ).unwrap();
+    CombinedLogger::init(vec![
+        TermLogger::new(
+            LevelFilter::Info,
+            Config::default(),
+            TerminalMode::Mixed,
+            ColorChoice::Auto,
+        ),
+        WriteLogger::new(LevelFilter::max(), Config::default(), {
+            fs::create_dir_all("log").unwrap();
+            let date = Local::now().to_rfc3339_opts(SecondsFormat::Secs, false);
+            // this fixes windows being windows
+            let date = date.replace(":", "-");
+            let filename = format!("{}.log", date);
+            if cfg!(windows) {
+                File::create(format!("log\\{}", filename)).unwrap()
+            } else {
+                File::create(format!("log/{}", filename)).unwrap()
+            }
+        }),
+    ])
+    .unwrap();
 
     dotenv::dotenv().ok();
 
@@ -234,68 +257,63 @@ async fn start_secure_server() -> SecureServer{
         socket,
     }
 }*/
-/*
+
 define_rmc_proto!(
     proto AuthClientProtocol{
         Auth
     }
-);*/
+);
 
+impl Auth for AuthClient{
+    async fn login(&self, name: String) -> Result<(), ErrorCode> {
+        todo!()
+    }
 
-//#[rmc_struct(AuthClientProtocol)]
-struct AuthClient{
+    async fn login_ex(&self, name: String, extra_data: Any) -> Result<(QResult, u32, Vec<u8>, ConnectionData, String), ErrorCode> {
+        todo!()
+    }
 
+    async fn request_ticket(&self, source_pid: u32, destination_pid: u32) -> Result<(QResult, Vec<u8>), ErrorCode> {
+        todo!()
+    }
+
+    async fn get_pid(&self, username: String) -> Result<u32, ErrorCode> {
+        todo!()
+    }
+
+    async fn get_name(&self, pid: u32) -> Result<String, ErrorCode> {
+        todo!()
+    }
 }
 
-async fn start_servers(){
+#[rmc_struct(AuthClientProtocol)]
+struct AuthClient {}
+
+async fn start_servers() {
+    
+    
+    //let auth_ip = SocketAddrV4::from_str("157.90.13.221:30039").unwrap();
+    let auth_ip = SocketAddrV4::from_str("31.220.75.208:10000").unwrap();
+    let auth_port = VirtualPort::new(1, 10);
+
+    let auth_sockaddr = PRUDPSockAddr::new(auth_ip, auth_port);
+
+    let (router_secure, _) = Router::new(SocketAddrV4::new(*OWN_IP_PRIVATE, *SECURE_SERVER_PORT))
+        .await
+        .expect("unable to start router");
+
+    let mut socket_secure = router_secure
+        .add_socket(VirtualPort::new(1, 10), Unsecure("CD&ML"))
+        .await
+        .expect("unable to add socket");
+
+    let conn = socket_secure.connect(auth_sockaddr).await.unwrap();
+
+    let obj = new_rmc_gateway_connection(conn, OnlyRemote::<RemoteAuthClientProtocol>::new);
 
 
 
-
-
-    let a = tokio::spawn(async{
-        let (router_auth, _) =
-            Router::new(SocketAddrV4::new(*OWN_IP_PRIVATE, *AUTH_SERVER_PORT)).await.expect("unable to start router");
-
-        let mut socket_auth = router_auth.add_socket(VirtualPort::new(1,10), Unsecure("CD&ML")).await
-            .expect("unable to add socket");
-
-        let mut conn = socket_auth.accept().await.unwrap();
-        info!("got conn");
-
-        if let Some(data) = conn.recv().await{
-            let str = String::from_utf8(data).unwrap();
-
-            println!("{}", str)
-        }
-    });
-
-    let b = tokio::spawn(async{
-        let auth_ip = SocketAddrV4::new(*OWN_IP_PRIVATE, *AUTH_SERVER_PORT);
-        let auth_port = VirtualPort::new(1,10);
-
-        let auth_sockaddr = PRUDPSockAddr::new(auth_ip,auth_port);
-
-
-        let (router_secure, _) =
-            Router::new(SocketAddrV4::new(*OWN_IP_PRIVATE, *SECURE_SERVER_PORT)).await.expect("unable to start router");
-
-        let mut socket_secure = router_secure.add_socket(VirtualPort::new(1,10), Unsecure("CD&ML")).await
-            .expect("unable to add socket");
-
-        let conn = socket_secure.connect(auth_sockaddr).await.unwrap();
-
-        let conn = conn.duplicate_sender();
-
-        conn.send("Yippie".as_bytes().to_owned()).await;
-
-        info!("got conn");
-    });
-
-    a.await;
-    b.await;
-
-/*
+    /*
     #[cfg(feature = "auth")]
     let auth_server = start_auth_server().await;
     #[cfg(feature = "secure")]

@@ -1,12 +1,13 @@
 use proc_macro2::{Ident, Span, TokenStream, TokenTree};
 use quote::{quote, ToTokens};
-use syn::{LitInt, Token, Type};
+use syn::{LitInt, ReturnType, Token, Type};
 use syn::token::{Brace, Paren, Semi};
 
 pub struct ProtoMethodData{
     pub id: LitInt,
     pub name: Ident,
-    pub parameters: Vec<(Ident, Type)>
+    pub parameters: Vec<(Ident, Type)>,
+    pub ret_val: ReturnType,
 }
 
 
@@ -22,8 +23,8 @@ pub struct RmcProtocolData{
     pub methods: Vec<ProtoMethodData>
 }
 
-impl ToTokens for RmcProtocolData{
-    fn to_tokens(&self, tokens: &mut TokenStream) {
+impl RmcProtocolData{
+    fn generate_raw_trait(&self, tokens: &mut TokenStream){
         let Self{
             has_returns,
             name,
@@ -73,7 +74,7 @@ impl ToTokens for RmcProtocolData{
                                 <#param_type as crate::rmc::structures::RmcSerialize>::deserialize(
                                 &mut cursor
                             ) else {
-                                return Err(ErrorCode::Core_InvalidArgument);
+                                return Err(crate::rmc::response::ErrorCode::Core_InvalidArgument);
                             };
                         }.to_tokens(tokens)
                     }
@@ -156,6 +157,111 @@ impl ToTokens for RmcProtocolData{
         quote!{
             impl<T: #name> RawAuth for T{}
         }.to_tokens(tokens);
+    }
+
+    fn generate_raw_remote_trait(&self, tokens: &mut TokenStream) {
+        let Self {
+            has_returns,
+            name,
+            id: proto_id,
+            methods,
+            ..
+        } = self;
+
+        // this gives us the name which the identifier of the corresponding Raw trait
+        let remote_name = Ident::new(&format!("Remote{}", name), name.span());
+
+
+        // boilerplate tokens which all raw traits need
+        quote!{
+            #[doc(hidden)]
+            pub trait #remote_name: crate::rmc::protocols::HasRmcConnection
+        }.to_tokens(tokens);
+
+        // generate the body of the raw protocol trait
+        Brace::default().surround(tokens, |tokens|{
+            //generate each raw method
+            for method in methods{
+                let ProtoMethodData {
+                    name,
+                    parameters,
+                    ret_val,
+                    id: method_id,
+                    ..
+                } = method;
+
+                quote!{
+                    async fn #name
+                }.to_tokens(tokens);
+
+                Paren::default().surround(tokens, |tokens|{
+                    quote!{ &self, }.to_tokens(tokens);
+                    for (param_ident, param_type) in parameters{
+                        quote!{ #param_ident: #param_type, }.to_tokens(tokens);
+                    }
+                });
+
+                quote!{
+                    #ret_val
+                }.to_tokens(tokens);
+
+                Brace::default().surround(tokens, |tokens|{
+                    quote! {
+                        let mut send_data = Vec::new();
+                        let mut cursor = ::std::io::Cursor::new(&mut send_data);
+                    }.to_tokens(tokens);
+
+                    for (param_name, param_type) in parameters{
+                        quote!{
+                            crate::result::ResultExtension::display_err_or_some(
+                                <#param_type as crate::rmc::structures::RmcSerialize>::serialize(
+                                    &#param_name,
+                                    &mut cursor
+                                )
+                            ).ok_or(crate::rmc::response::ErrorCode::Core_InvalidArgument)?;
+                        }.to_tokens(tokens)
+                    }
+
+                    quote!{
+                        let call_id = rand::random();
+
+                        let message = crate::rmc::message::RMCMessage{
+                            call_id,
+                            method_id: #method_id,
+                            protocol_id: #proto_id,
+                            rest_of_data: send_data
+                        };
+
+                        let rmc_conn = <Self as crate::rmc::protocols::HasRmcConnection>::get_connection(self);
+                    }.to_tokens(tokens);
+
+                    if *has_returns{
+                        quote!{
+                            crate::result::ResultExtension::display_err_or_some(
+                                rmc_conn.make_raw_call(&message).await
+                            ).ok_or(crate::rmc::response::ErrorCode::Core_Exception)
+                        }.to_tokens(tokens);
+                    } else {
+                        quote!{
+                            crate::result::ResultExtension::display_err_or_some(
+                                rmc_conn.make_raw_call_no_response(&message).await
+                            );
+                        }.to_tokens(tokens);
+                    }
+
+                })
+            }
+        });
+
+
+    }
+
+    fn generate_raw_info(&self, tokens: &mut TokenStream){
+        let Self{
+            name,
+            id,
+            ..
+        } = self;
 
         let raw_info_name = Ident::new(&format!("Raw{}Info", name), Span::call_site());
 
@@ -168,6 +274,18 @@ impl ToTokens for RmcProtocolData{
                 pub const PROTOCOL_ID: u16 = #id;
             }
         }.to_tokens(tokens);
+    }
+}
+
+impl ToTokens for RmcProtocolData{
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        self.generate_raw_trait(tokens);
+        self.generate_raw_info(tokens);
+        self.generate_raw_remote_trait(tokens);
+
+
+
+
     }
 }
 

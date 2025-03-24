@@ -323,7 +323,8 @@ pub fn rmc_proto(attr: TokenStream, input: TokenStream) -> TokenStream{
                 ProtoMethodData{
                     id,
                     name: func.sig.ident.clone(),
-                    parameters: funcs
+                    parameters: funcs,
+                    ret_val: func.sig.output.clone()
                 }
             }).collect()
 
