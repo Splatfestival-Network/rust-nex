@@ -51,6 +51,8 @@ impl Router {
 
             let connection = packet.source_sockaddr(addr);
 
+            println!("data from {:?}", connection);
+
             let endpoints = self.endpoints.read().await;
 
             let Some(endpoint) = endpoints[packet.header.destination_port.get_port_number() as usize].as_ref() else {

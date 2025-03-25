@@ -1,6 +1,6 @@
 use crate::prudp::packet::flags::{ACK, HAS_SIZE, MULTI_ACK, NEED_ACK, RELIABLE};
 use crate::prudp::packet::types::{CONNECT, DATA, DISCONNECT, PING, SYN};
-use crate::prudp::packet::PacketOption::{ConnectionSignature, FragmentId, MaximumSubstreamId, SupportedFunctions};
+use crate::prudp::packet::PacketOption::{ConnectionSignature, FragmentId, InitialSequenceId, MaximumSubstreamId, SupportedFunctions};
 use crate::prudp::packet::{PRUDPHeader, PRUDPPacket, PacketOption, TypesFlags, VirtualPort};
 use crate::prudp::router::{Error, Router};
 use crate::prudp::sockaddr::PRUDPSockAddr;
@@ -670,7 +670,7 @@ impl<T: CryptoHandler> InternalSocket<T> {
             .write_to(&mut vec)
             .expect("somehow failed to convert backet to bytes");
 
-        println!("{}", hex::encode(&vec));
+        println!("sent out: {}", hex::encode(&vec));
 
         self.socket
             .send_to(&vec, dest.regular_socket_addr)
@@ -681,7 +681,11 @@ impl<T: CryptoHandler> InternalSocket<T> {
     async fn handle_syn(&self, address: PRUDPSockAddr, packet: PRUDPPacket) {
         info!("got syn");
 
-        let mut response = packet.base_acknowledgement_packet();
+        let mut response = packet.base_response_packet();
+
+        response.header.types_and_flags.set_types(SYN);
+        response.header.types_and_flags.set_flag(ACK);
+        response.header.types_and_flags.set_flag(HAS_SIZE);
 
         let signature = address.calculate_connection_signature();
 
@@ -700,9 +704,11 @@ impl<T: CryptoHandler> InternalSocket<T> {
             }
         }
 
-        response.header.types_and_flags.set_flag(HAS_SIZE | ACK);
+        response.set_sizes();
 
         self.crypto_handler.sign_pre_handshake(&mut response);
+
+        //println!("got syn: {:?}", response);
 
         self.send_packet_unbuffered(address, response)
             .await;
@@ -822,15 +828,44 @@ impl<T: CryptoHandler> InternalSocket<T> {
             remote_signature,
             *own_signature,
             &packet.payload,
-            *max_substream,
+            1 + *max_substream,
         );
 
-        let mut response = packet.base_acknowledgement_packet();
-        response.header.types_and_flags.set_flag(HAS_SIZE | ACK);
+        let mut response = packet.base_response_packet();
+        response.header.types_and_flags.set_types(CONNECT);
+        response.header.types_and_flags.set_flag(ACK);
+        response.header.types_and_flags.set_flag(HAS_SIZE);
+
         response.header.session_id = session_id;
+        response.header.sequence_id = 1;
+
         response.payload = return_data;
 
+
+        //let remote_signature = address.calculate_connection_signature();
+
+        response
+            .options
+            .push(ConnectionSignature(Default::default()));
+
+        for option in &packet.options {
+            match option {
+                MaximumSubstreamId(max_substream) => response
+                    .options
+                    .push(MaximumSubstreamId(*max_substream)),
+                SupportedFunctions(funcs) => {
+                    response.options.push(SupportedFunctions(*funcs))
+                }
+                _ => { /* ? */ }
+            }
+        }
+
+
+        response.set_sizes();
+
         crypto.sign_connect(&mut response);
+
+        //println!("connect out: {:?}", response);
 
         self.create_connection(crypto, address, session_id).await;
 
@@ -926,6 +961,15 @@ impl<T: CryptoHandler> AnyInternalSocket for InternalSocket<T> {
             info!("got ack");
             if packet.header.types_and_flags.get_types() == SYN ||
                 packet.header.types_and_flags.get_types() == CONNECT{
+
+                if packet.header.types_and_flags.get_types() == SYN{
+                    println!("Syn: {:?}", packet);
+                }
+
+                if packet.header.types_and_flags.get_types() == CONNECT{
+                    println!("Connect: {:?}", packet);
+                }
+
                 let sender = self.connection_establishment_data_sender.lock().await;
                 info!("redirecting ack to active connection establishment code");
 
@@ -976,7 +1020,7 @@ impl<T: CryptoHandler> AnyInternalSocket for InternalSocket<T> {
             },
             options: vec![
                 SupportedFunctions(0x104),
-                MaximumSubstreamId(1),
+                MaximumSubstreamId(0),
                 ConnectionSignature(remote_signature)
             ],
             ..Default::default()
@@ -1011,7 +1055,7 @@ impl<T: CryptoHandler> AnyInternalSocket for InternalSocket<T> {
             },
             options: vec![
                 SupportedFunctions(0x04),
-                MaximumSubstreamId(1),
+                MaximumSubstreamId(0),
                 ConnectionSignature(remote_signature)
             ],
             ..Default::default()

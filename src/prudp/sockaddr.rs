@@ -26,7 +26,7 @@ impl PRUDPSockAddr{
         let mut hmac = Md5Hmac::new_from_slice(&[0; 16]).expect("fuck");
 
         let mut data = self.regular_socket_addr.ip().octets().to_vec();
-        data.extend_from_slice(&self.regular_socket_addr.port().to_be_bytes());
+        //data.extend_from_slice(&self.regular_socket_addr.port().to_be_bytes());
 
         hmac.write_all(&data).expect("figuring this out was complete ass");
         let result: [u8; 16] = hmac.finalize().into_bytes()[0..16].try_into().expect("fuck");

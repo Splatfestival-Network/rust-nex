@@ -132,14 +132,14 @@ impl RemoteObject for () {
 
 pub trait RmcCallable {
     //type Remote: RemoteObject;
-    async fn rmc_call(
+    fn rmc_call(
         &self,
         responder: &SendingConnection,
         protocol_id: u16,
         method_id: u32,
         call_id: u32,
         rest: Vec<u8>,
-    );
+    ) -> impl std::future::Future<Output = ()> + Send;
 }
 
 #[macro_export]
@@ -215,8 +215,8 @@ impl<T: RemoteInstantiatable> OnlyRemote<T>{
 }
 
 impl<T: RemoteInstantiatable> RmcCallable for OnlyRemote<T>{
-    async fn rmc_call(&self, responder: &SendingConnection, protocol_id: u16, method_id: u32, call_id: u32, rest: Vec<u8>) {
-
+    fn rmc_call(&self, responder: &SendingConnection, protocol_id: u16, method_id: u32, call_id: u32, rest: Vec<u8>) -> impl std::future::Future<Output = ()> + Send {
+        async{}
     }
 }
 
@@ -229,7 +229,7 @@ async fn handle_incoming<T: RmcCallable + Send + Sync + 'static>(
     let sending_conn = connection.duplicate_sender();
 
     while let Some(v) = connection.recv().await{
-        let Some(proto_id) = v.get(5) else {
+        let Some(proto_id) = v.get(4) else {
             error!("received too small rmc message.");
             error!("ending rmc gateway.");
             return

@@ -16,7 +16,7 @@ use crate::prudp::router::Router;
 use crate::prudp::sockaddr::PRUDPSockAddr;
 use crate::prudp::socket::Unsecure;
 use chrono::{Local, SecondsFormat};
-use log::info;
+use log::{error, info};
 use once_cell::sync::Lazy;
 use simplelog::{
     ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode, WriteLogger,
@@ -68,7 +68,7 @@ static SECURE_SERVER_PORT: Lazy<u16> = Lazy::new(|| {
     env::var("SECURE_SERVER_PORT")
         .ok()
         .and_then(|s| s.parse().ok())
-        .unwrap_or(10002)
+        .unwrap_or(10001)
 });
 
 static OWN_IP_PRIVATE: Lazy<Ipv4Addr> = Lazy::new(|| {
@@ -258,11 +258,6 @@ async fn start_secure_server() -> SecureServer{
     }
 }*/
 
-define_rmc_proto!(
-    proto AuthClientProtocol{
-        Auth
-    }
-);
 
 impl Auth for AuthClient{
     async fn login(&self, name: String) -> Result<(), ErrorCode> {
@@ -287,7 +282,16 @@ impl Auth for AuthClient{
 }
 
 #[rmc_struct(AuthClientProtocol)]
-struct AuthClient {}
+struct AuthClient {
+
+}
+
+define_rmc_proto!(
+    proto AuthClientProtocol{
+        Auth
+    }
+);
+
 
 async fn start_servers() {
     
@@ -298,18 +302,29 @@ async fn start_servers() {
 
     let auth_sockaddr = PRUDPSockAddr::new(auth_ip, auth_port);
 
-    let (router_secure, _) = Router::new(SocketAddrV4::new(*OWN_IP_PRIVATE, *SECURE_SERVER_PORT))
+    let (router_secure, _) = Router::new(SocketAddrV4::new(*OWN_IP_PRIVATE, *AUTH_SERVER_PORT))
         .await
         .expect("unable to start router");
 
     let mut socket_secure = router_secure
-        .add_socket(VirtualPort::new(1, 10), Unsecure("CD&ML"))
+        .add_socket(VirtualPort::new(1, 10), Unsecure("6f599f81"))
         .await
         .expect("unable to add socket");
 
-    let conn = socket_secure.connect(auth_sockaddr).await.unwrap();
+   // let conn = socket_secure.connect(auth_sockaddr).await.unwrap();
 
-    let obj = new_rmc_gateway_connection(conn, OnlyRemote::<RemoteAuthClientProtocol>::new);
+    
+    loop {
+        let Some(conn) = socket_secure.accept().await else {
+            error!("server crashed");
+            return;
+        };
+
+        info!("new connected user!");
+
+        let _ = new_rmc_gateway_connection(conn, |_| AuthClient {}); //OnlyRemote::<RemoteAuthClientProtocol>::new
+
+    }
 
 
 
