@@ -253,6 +253,15 @@ async fn handle_incoming<T: RmcCallable>(
                 return
             };
 
+            let RMCMessage{
+                protocol_id,
+                method_id,
+                call_id,
+                rest_of_data
+            } = message;
+
+            remote.rmc_call(&sending_conn, protocol_id, method_id, call_id, rest_of_data).await; 
+
             info!("got rmc request");
         }
     }
