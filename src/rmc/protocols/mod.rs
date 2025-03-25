@@ -220,7 +220,7 @@ impl<T: RemoteInstantiatable> RmcCallable for OnlyRemote<T>{
     }
 }
 
-async fn handle_incoming<T: RmcCallable>(
+async fn handle_incoming<T: RmcCallable + Send + Sync + 'static>(
     mut connection: ExternalConnection,
     remote: Arc<T>,
     notify: Arc<Notify>,
