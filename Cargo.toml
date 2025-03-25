@@ -3,6 +3,17 @@ name = "splatoon-server-rust"
 version = "0.1.0"
 edition = "2021"
 
+[profile.prod]
+inherits = "release"
+overflow-checks = false
+strip = true
+debug = false
+debug-assertions = false
+lto = true
+incremental = false
+
+
+
 [dependencies]
 bytemuck = { version =  "1.21.0", features = ["derive"] }
 dotenv = "0.15.0"
