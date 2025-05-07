@@ -7,33 +7,37 @@
 //! also the first and only current usage of rnex, expect this and rnex to be split into seperate
 //! repos soon.
 
-use crate::rmc::protocols::auth::RemoteAuth;
-use crate::rmc::protocols::auth::RawAuthInfo;
-use crate::rmc::protocols::auth::RawAuth;
 use crate::nex::account::Account;
+use crate::nex::auth_handler::{AuthHandler, RemoteAuthClientProtocol};
 use crate::prudp::packet::VirtualPort;
 use crate::prudp::router::Router;
+use crate::prudp::secure::Secure;
 use crate::prudp::sockaddr::PRUDPSockAddr;
-use crate::prudp::socket::Unsecure;
-use chrono::{Local, SecondsFormat};
-use log::{error, info};
-use once_cell::sync::Lazy;
-use simplelog::{
-    ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode, WriteLogger,
-};
-use std::fs::File;
-use std::net::{Ipv4Addr, SocketAddrV4};
-use std::{env, fs};
-use std::marker::PhantomData;
-use std::ops::{BitAnd, BitOr};
-use std::str::FromStr;
-use macros::rmc_struct;
+use crate::prudp::unsecure::Unsecure;
 use crate::rmc::protocols::auth::Auth;
+use crate::rmc::protocols::auth::RawAuth;
+use crate::rmc::protocols::auth::RawAuthInfo;
+use crate::rmc::protocols::auth::RemoteAuth;
 use crate::rmc::protocols::{new_rmc_gateway_connection, OnlyRemote};
 use crate::rmc::response::ErrorCode;
 use crate::rmc::structures::any::Any;
 use crate::rmc::structures::connection_data::ConnectionData;
 use crate::rmc::structures::qresult::QResult;
+use chrono::{Local, SecondsFormat};
+use log::{error, info};
+use macros::rmc_struct;
+use once_cell::sync::Lazy;
+use simplelog::{
+    ColorChoice, CombinedLogger, Config, LevelFilter, TermLogger, TerminalMode, WriteLogger,
+};
+use std::fs::File;
+use std::marker::PhantomData;
+use std::net::{Ipv4Addr, SocketAddrV4};
+use std::ops::{BitAnd, BitOr};
+use std::str::FromStr;
+use std::time::Duration;
+use std::{env, fs};
+use tokio::task::JoinHandle;
 
 mod endianness;
 mod prudp;
@@ -43,9 +47,9 @@ pub mod rmc;
 mod grpc;
 mod kerberos;
 mod nex;
-mod web;
-mod versions;
 mod result;
+mod versions;
+mod web;
 
 static KERBEROS_SERVER_PASSWORD: Lazy<String> = Lazy::new(|| {
     env::var("AUTH_SERVER_PASSWORD")
@@ -258,86 +262,112 @@ async fn start_secure_server() -> SecureServer{
     }
 }*/
 
+async fn start_auth() -> JoinHandle<()> {
+    tokio::spawn(async {
+        let (router_secure, _) = Router::new(SocketAddrV4::new(*OWN_IP_PRIVATE, *AUTH_SERVER_PORT))
+            .await
+            .expect("unable to start router");
 
-impl Auth for AuthClient{
-    async fn login(&self, name: String) -> Result<(), ErrorCode> {
-        todo!()
-    }
+        let mut socket_secure = router_secure
+            .add_socket(VirtualPort::new(1, 10), Unsecure("6f599f81"))
+            .await
+            .expect("unable to add socket");
 
-    async fn login_ex(&self, name: String, extra_data: Any) -> Result<(QResult, u32, Vec<u8>, ConnectionData, String), ErrorCode> {
-        todo!()
-    }
+        // let conn = socket_secure.connect(auth_sockaddr).await.unwrap();
 
-    async fn request_ticket(&self, source_pid: u32, destination_pid: u32) -> Result<(QResult, Vec<u8>), ErrorCode> {
-        todo!()
-    }
+        loop {
+            let Some(conn) = socket_secure.accept().await else {
+                error!("server crashed");
+                return;
+            };
 
-    async fn get_pid(&self, username: String) -> Result<u32, ErrorCode> {
-        todo!()
-    }
+            info!("new connected user!");
 
-    async fn get_name(&self, pid: u32) -> Result<String, ErrorCode> {
-        todo!()
-    }
+            let _ = new_rmc_gateway_connection(conn, |_| AuthHandler {
+                destination_server_acct: &SECURE_SERVER_ACCOUNT,
+                build_name: "branch:origin/project/wup-agmj build:3_8_15_2004_0",
+                station_url: &SECURE_STATION_URL,
+            });
+        }
+    })
 }
 
-#[rmc_struct(AuthClientProtocol)]
-struct AuthClient {
+async fn start_secure() -> JoinHandle<()> {
+    tokio::spawn(async {
+        let (router_secure, _) =
+            Router::new(SocketAddrV4::new(*OWN_IP_PRIVATE, *SECURE_SERVER_PORT))
+                .await
+                .expect("unable to start router");
 
+        let mut socket_secure = router_secure
+            .add_socket(
+                VirtualPort::new(1, 10),
+                Secure("6f599f81", &SECURE_SERVER_ACCOUNT),
+            )
+            .await
+            .expect("unable to add socket");
+
+        // let conn = socket_secure.connect(auth_sockaddr).await.unwrap();
+
+        loop {
+            let Some(conn) = socket_secure.accept().await else {
+                error!("server crashed");
+                return;
+            };
+
+            info!("new connected user on secure :D!");
+
+            let _ = new_rmc_gateway_connection(conn, |_| AuthHandler {
+                destination_server_acct: &SECURE_SERVER_ACCOUNT,
+                build_name: "branch:origin/project/wup-agmj build:3_8_15_2004_0",
+                station_url: &SECURE_STATION_URL,
+            });
+        }
+    })
 }
 
-define_rmc_proto!(
-    proto AuthClientProtocol{
-        Auth
-    }
-);
+async fn start_test() {
+    let addr = SocketAddrV4::new(*OWN_IP_PRIVATE, *AUTH_SERVER_PORT);
 
+    let virt_addr = VirtualPort::new(1, 10);
+    let prudp_addr = PRUDPSockAddr::new(addr, virt_addr);
 
-async fn start_servers() {
-    
-    
-    //let auth_ip = SocketAddrV4::from_str("157.90.13.221:30039").unwrap();
-    let auth_ip = SocketAddrV4::from_str("31.220.75.208:10000").unwrap();
-    let auth_port = VirtualPort::new(1, 10);
-
-    let auth_sockaddr = PRUDPSockAddr::new(auth_ip, auth_port);
-
-    let (router_secure, _) = Router::new(SocketAddrV4::new(*OWN_IP_PRIVATE, *AUTH_SERVER_PORT))
+    let (router_test, _) = Router::new(SocketAddrV4::new(*OWN_IP_PRIVATE, 26969))
         .await
         .expect("unable to start router");
 
-    let mut socket_secure = router_secure
+    let mut socket_secure = router_test
         .add_socket(VirtualPort::new(1, 10), Unsecure("6f599f81"))
         .await
         .expect("unable to add socket");
 
-   // let conn = socket_secure.connect(auth_sockaddr).await.unwrap();
+    let conn = socket_secure.connect(prudp_addr).await.unwrap();
 
-    
-    loop {
-        let Some(conn) = socket_secure.accept().await else {
-            error!("server crashed");
-            return;
-        };
+    let remote =
+        new_rmc_gateway_connection(conn, |r| OnlyRemote::<RemoteAuthClientProtocol>::new(r));
 
-        info!("new connected user!");
+    let v = remote
+        .login_ex("1469690705".to_string(), Any::default())
+        .await
+        .unwrap();
 
-        let _ = new_rmc_gateway_connection(conn, |_| AuthClient {}); //OnlyRemote::<RemoteAuthClientProtocol>::new
+    println!("got it");
+}
 
-    }
-
-
-
-    /*
+async fn start_servers() {
     #[cfg(feature = "auth")]
-    let auth_server = start_auth_server().await;
+    let auth_server = start_auth().await;
     #[cfg(feature = "secure")]
-    let secure_server = start_secure_server().await;
-    let web_server = web::start_web().await;
+    let secure_server = start_secure().await;
+    //let web_server = web::start_web().await;
+
+    //tokio::time::sleep(Duration::from_secs(1)).await;
+
+    //start_test().await;
 
     #[cfg(feature = "auth")]
-    auth_server.join_handle.await.expect("auth server crashed");
+    auth_server.await.expect("auth server crashed");
     #[cfg(feature = "secure")]
-    secure_server.join_handle.await.expect("auth server crashed");
-    web_server.await.expect("webserver crashed");*/
+    secure_server.await.expect("auth server crashed");
+    //web_server.await.expect("webserver crashed");
 }

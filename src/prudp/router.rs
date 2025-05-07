@@ -50,8 +50,7 @@ impl Router {
             trace!("got valid prudp packet from someone({}): \n{:?}", addr, packet);
 
             let connection = packet.source_sockaddr(addr);
-
-            println!("data from {:?}", connection);
+            
 
             let endpoints = self.endpoints.read().await;
 

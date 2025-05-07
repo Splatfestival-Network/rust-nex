@@ -17,7 +17,7 @@ pub fn write_struct(writer: &mut dyn Write, version: u8, pred: impl FnOnce(&mut 
 
     (pred)(&mut scratch_space)?;
 
-    let u32_size= scratch_space.len() as u32;
+    let u32_size = scratch_space.len() as u32;
 
     writer.write_all(bytes_of(&u32_size))?;
     writer.write_all(&scratch_space)?;

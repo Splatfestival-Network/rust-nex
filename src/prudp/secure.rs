@@ -4,10 +4,13 @@ use log::error;
 use rc4::cipher::StreamCipherCoreWrapper;
 use rc4::{KeyInit, Rc4, Rc4Core, StreamCipher};
 use rc4::consts::U16;
+use typenum::U5;
 use crate::endianness::{IS_BIG_ENDIAN, ReadExtensions};
 use crate::kerberos::{derive_key, TicketInternalData};
 use crate::nex::account::Account;
-use crate::prudp::socket::EncryptionPair;
+use crate::prudp::packet::PRUDPPacket;
+use crate::prudp::socket::{CryptoHandler, CryptoHandlerConnectionInstance, EncryptionPair};
+use crate::prudp::unsecure::UnsecureInstance;
 use crate::rmc::structures::RmcSerialize;
 
 pub fn read_secure_connection_data(data: &[u8], act: &Account) -> Option<([u8; 32], u32, u32)>{
@@ -97,4 +100,93 @@ pub fn generate_secure_encryption_pairs(mut session_key: [u8; 32], count: u8) ->
     }
 
     vec
+}
+
+
+pub struct Secure(pub &'static str, pub &'static Account);
+
+
+pub struct SecureInstance {
+    access_key: &'static str,
+    session_key: [u8; 32],
+    streams: Vec<EncryptionPair<Rc4<U32>>>,
+    self_signature: [u8; 16],
+    remote_signature: [u8; 16],
+    pid: u32,
+}
+
+impl CryptoHandler for Secure {
+    type CryptoConnectionInstance = SecureInstance;
+
+    fn instantiate(
+        &self,
+        remote_signature: [u8; 16],
+        self_signature: [u8; 16],
+        payload: &[u8],
+        substream_count: u8,
+    ) -> Option<(Vec<u8>, Self::CryptoConnectionInstance)> {
+        let (session_key, pid, check_value) = read_secure_connection_data(payload, &self.1)?;
+
+        let check_value_response = check_value + 1;
+
+        let data = bytemuck::bytes_of(&check_value_response);
+
+        let mut response = Vec::new();
+
+        data.serialize(&mut response).ok()?;
+
+        let encryption_pairs = generate_secure_encryption_pairs(session_key, substream_count);
+
+        Some((
+            response,
+            SecureInstance {
+                pid,
+                streams: encryption_pairs,
+                session_key,
+                access_key: self.0,
+                remote_signature,
+                self_signature,
+            },
+        ))
+    }
+
+    fn sign_pre_handshake(&self, packet: &mut PRUDPPacket) {
+        packet.set_sizes();
+        packet.calculate_and_assign_signature(self.0, None, None);
+    }
+}
+
+
+impl CryptoHandlerConnectionInstance for SecureInstance {
+    type Encryption = Rc4<U5>;
+
+    fn decrypt_incoming(&mut self, substream: u8, data: &mut [u8]) {
+        if let Some(crypt_pair) = self.streams.get_mut(substream as usize){
+            crypt_pair.recv.apply_keystream(data);
+        }
+    }
+
+    fn encrypt_outgoing(&mut self, substream: u8, data: &mut [u8]) {
+        if let Some(crypt_pair) = self.streams.get_mut(substream as usize){
+            crypt_pair.send.apply_keystream(data);
+        }
+    }
+
+    fn get_user_id(&self) -> u32 {
+        self.pid
+    }
+
+    fn sign_connect(&self, packet: &mut PRUDPPacket) {
+        packet.set_sizes();
+        packet.calculate_and_assign_signature(self.access_key, None, Some(self.self_signature));
+    }
+
+    fn sign_packet(&self, packet: &mut PRUDPPacket) {
+        packet.set_sizes();
+        packet.calculate_and_assign_signature(self.access_key, Some(self.session_key), Some(self.self_signature));
+    }
+
+    fn verify_packet(&self, packet: &PRUDPPacket) -> bool {
+        true
+    }
 }

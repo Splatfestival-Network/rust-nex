@@ -36,7 +36,7 @@ pub struct RMCResponse {
 impl RMCResponse {
     pub fn new(stream: &mut (impl Seek + Read)) -> io::Result<Self>{
         // ignore the size for now this will only be used for checking
-        let _: u32 = stream.read_struct(IS_BIG_ENDIAN)?;
+        let size: u32 = stream.read_struct(IS_BIG_ENDIAN)?;
 
         let protocol_id: u8 = stream.read_struct(IS_BIG_ENDIAN)?;
 
@@ -54,9 +54,9 @@ impl RMCResponse {
             let method_id: u32 = stream.read_struct(IS_BIG_ENDIAN)?;
             let method_id = method_id & (!0x8000);
 
-            let mut data: Vec<u8> = Vec::new();
+            let mut data: Vec<u8> = vec![0u8; (size - 2 - 4 - 4) as _];
 
-            stream.read_to_end(&mut data)?;
+            stream.read(&mut data)?;
 
 
             RMCResponseResult::Success {
@@ -154,15 +154,13 @@ pub async fn send_result(
     method_id: u32,
     call_id: u32,
 ) {
+   
+    println!("{}", hex::encode(result.clone().unwrap()));
     let response_result = match result {
         Ok(v) => RMCResponseResult::Success {
             call_id,
             method_id,
-            data: {
-                let mut vec = Vec::new();
-                v.serialize(&mut vec).expect("serialization error");
-                vec
-            }
+            data: v
         },
         Err(e) =>
             RMCResponseResult::Error {
@@ -187,7 +185,7 @@ pub async fn send_response(connection: &SendingConnection, rmcresponse: RMCRespo
 //taken from kinnays error list directly
 #[allow(nonstandard_style)]
 #[repr(u32)]
-#[derive(Debug, EnumTryInto)]
+#[derive(Debug, EnumTryInto, Clone, Copy)]
 pub enum ErrorCode {
     Core_Unknown = 0x00010001,
     Core_NotImplemented = 0x00010002,

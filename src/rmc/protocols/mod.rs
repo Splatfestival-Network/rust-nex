@@ -34,7 +34,7 @@ pub enum RemoteCallError {
     ServerError(ErrorCode),
     #[error("Connection broke")]
     ConnectionBroke,
-    #[error("Error reading response data")]
+    #[error("Error reading response data: {0}")]
     InvalidResponse(#[from] structures::Error),
 }
 
@@ -148,7 +148,7 @@ macro_rules! define_rmc_proto {
         $($protocol:path),*
     }) => {
         paste::paste!{
-            trait [<Local $name>]: std::any::Any $( + [<Raw $protocol>] + $protocol)* {
+            pub trait [<Local $name>]: std::any::Any $( + [<Raw $protocol>] + $protocol)* {
                 async fn rmc_call(&self, remote_response_connection: &crate::prudp::socket::SendingConnection, protocol_id: u16, method_id: u32, call_id: u32, rest: Vec<u8>){
                     match protocol_id{
                         $(
@@ -159,7 +159,7 @@ macro_rules! define_rmc_proto {
                 }
             }
 
-            struct [<Remote $name>](crate::rmc::protocols::RmcConnection);
+            pub struct [<Remote $name>](crate::rmc::protocols::RmcConnection);
 
             impl crate::rmc::protocols::RemoteInstantiatable for [<Remote $name>]{
                 fn new(conn: crate::rmc::protocols::RmcConnection) -> Self{
@@ -235,7 +235,7 @@ async fn handle_incoming<T: RmcCallable + Send + Sync + 'static>(
             return
         };
 
-        if proto_id & 0x80 == 0{
+        if (proto_id & 0x80) == 0{
             let Some(response) = RMCResponse::new(&mut Cursor::new(v)).display_err_or_some() else {
                 error!("ending rmc gateway.");
                 return
@@ -260,9 +260,11 @@ async fn handle_incoming<T: RmcCallable + Send + Sync + 'static>(
                 rest_of_data
             } = message;
 
+            info!("got rmc request, handeling it now...");
+
             remote.rmc_call(&sending_conn, protocol_id, method_id, call_id, rest_of_data).await; 
 
-            info!("got rmc request");
+            
         }
     }
 }
