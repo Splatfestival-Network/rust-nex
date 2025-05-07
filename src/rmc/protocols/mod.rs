@@ -1,6 +1,7 @@
 #![allow(async_fn_in_trait)]
 
 pub mod auth;
+pub mod secure;
 
 use crate::prudp::socket::{ExternalConnection, SendingConnection};
 use crate::rmc::message::RMCMessage;

@@ -38,6 +38,7 @@ use std::str::FromStr;
 use std::time::Duration;
 use std::{env, fs};
 use tokio::task::JoinHandle;
+use crate::nex::user::User;
 
 mod endianness;
 mod prudp;
@@ -317,10 +318,12 @@ async fn start_secure() -> JoinHandle<()> {
 
             info!("new connected user on secure :D!");
 
-            let _ = new_rmc_gateway_connection(conn, |_| AuthHandler {
-                destination_server_acct: &SECURE_SERVER_ACCOUNT,
-                build_name: "branch:origin/project/wup-agmj build:3_8_15_2004_0",
-                station_url: &SECURE_STATION_URL,
+            let ip = conn.socket_addr.regular_socket_addr;
+            let pid = conn.user_id;
+
+            let _ = new_rmc_gateway_connection(conn, |_| User {
+                ip,
+                pid
             });
         }
     })
