@@ -7,7 +7,6 @@ use crate::grpc::account;
 use crate::kerberos::KerberosDateTime;
 use crate::protocols::auth::AuthProtocolConfig;
 use crate::protocols::auth::ticket_generation::generate_ticket;
-use crate::prudp::socket::{ConnectionData, SocketData};
 use crate::rmc;
 use crate::rmc::message::RMCMessage;
 use crate::rmc::response::{ErrorCode, RMCResponseResult};

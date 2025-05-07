@@ -1,44 +1,114 @@
 use std::io;
-use std::io::{Write};
+use std::io::{Read, Seek, Write};
 use std::mem::transmute;
 use bytemuck::bytes_of;
+use log::error;
+use v_byte_macros::EnumTryInto;
+use crate::endianness::{ReadExtensions, IS_BIG_ENDIAN};
 use crate::prudp::packet::{PRUDPPacket};
 use crate::prudp::packet::flags::{NEED_ACK, RELIABLE};
 use crate::prudp::packet::PacketOption::FragmentId;
 use crate::prudp::packet::types::DATA;
-use crate::prudp::socket::{ConnectionData, SocketData};
+use crate::prudp::socket::{ExternalConnection, SendingConnection};
+use crate::rmc::response::ErrorCode::Core_Exception;
 use crate::rmc::structures::qresult::ERROR_MASK;
+use crate::rmc::structures::RmcSerialize;
+use crate::web::DirectionalData::{Incoming, Outgoing};
+use crate::web::WEB_DATA;
 
 pub enum RMCResponseResult {
-    Success{
+    Success {
         call_id: u32,
         method_id: u32,
         data: Vec<u8>,
     },
-    Error{
+    Error {
         error_code: ErrorCode,
         call_id: u32,
-    }
+    },
 }
 
 pub struct RMCResponse {
     pub protocol_id: u8,
-    pub response_result: RMCResponseResult
+    pub response_result: RMCResponseResult,
 }
 
 impl RMCResponse {
-    pub fn to_data(self) -> Vec<u8>{
+    pub fn new(stream: &mut (impl Seek + Read)) -> io::Result<Self>{
+        // ignore the size for now this will only be used for checking
+        let size: u32 = stream.read_struct(IS_BIG_ENDIAN)?;
+
+        let protocol_id: u8 = stream.read_struct(IS_BIG_ENDIAN)?;
+
+        /*let protocol_id: u16 = match protocol_id{
+            0x7F => {
+                stream.read_struct(IS_BIG_ENDIAN)?
+            },
+            _ => protocol_id as u16
+        };*/
+
+        let is_success: u8 = stream.read_struct(IS_BIG_ENDIAN)?;
+
+        let response_result = if is_success == 0x01{
+            let call_id: u32 = stream.read_struct(IS_BIG_ENDIAN)?;
+            let method_id: u32 = stream.read_struct(IS_BIG_ENDIAN)?;
+            let method_id = method_id & (!0x8000);
+
+            let mut data: Vec<u8> = vec![0u8; (size - 2 - 4 - 4) as _];
+
+            stream.read(&mut data)?;
+
+
+            RMCResponseResult::Success {
+                call_id,
+                method_id,
+                data
+            }
+        } else {
+            let error_code: u32 = stream.read_struct(IS_BIG_ENDIAN)?;
+            let error_code = error_code & (!0x80000000);
+            let call_id: u32 = stream.read_struct(IS_BIG_ENDIAN)?;
+
+            RMCResponseResult::Error {
+                error_code: {
+                    match ErrorCode::try_from(error_code){
+                        Ok(v) => v,
+                        Err(e) => {
+                            error!("invalid error code {:#010x}", error_code);
+                            Core_Exception
+                        }
+                    }
+                },
+                call_id,
+
+            }
+        };
+
+        Ok(Self{
+            protocol_id,
+            response_result
+        })
+    }
+
+    pub fn get_call_id(&self) -> u32{
+        match &self.response_result{
+            RMCResponseResult::Success { call_id, ..} => *call_id,
+            RMCResponseResult::Error { call_id, .. } => *call_id
+        }
+    }
+
+    pub fn to_data(self) -> Vec<u8> {
         generate_response(self.protocol_id, self.response_result).expect("failed to generate response")
     }
 }
 
-pub fn generate_response(protocol_id: u8, response: RMCResponseResult) -> io::Result<Vec<u8>>{
-    let size = 1 + 1 + match &response{
+pub fn generate_response(protocol_id: u8, response: RMCResponseResult) -> io::Result<Vec<u8>> {
+    let size = 1 + 1 + match &response {
         RMCResponseResult::Success {
             data,
             ..
         } => 4 + 4 + data.len(),
-        RMCResponseResult::Error{..} => 4 + 4,
+        RMCResponseResult::Error { .. } => 4 + 4,
     };
 
     let mut data_out = Vec::with_capacity(size + 4);
@@ -48,7 +118,7 @@ pub fn generate_response(protocol_id: u8, response: RMCResponseResult) -> io::Re
     data_out.write_all(bytes_of(&u32_size))?;
     data_out.push(protocol_id);
 
-    match response{
+    match response {
         RMCResponseResult::Success {
             call_id,
             method_id,
@@ -59,7 +129,7 @@ pub fn generate_response(protocol_id: u8, response: RMCResponseResult) -> io::Re
             let ored_method_id = method_id | 0x8000;
             data_out.write_all(bytes_of(&ored_method_id))?;
             data_out.write_all(&data)?;
-        },
+        }
         RMCResponseResult::Error {
             call_id,
             error_code
@@ -76,38 +146,46 @@ pub fn generate_response(protocol_id: u8, response: RMCResponseResult) -> io::Re
 
     Ok(data_out)
 }
-pub async fn send_response(original_packet: &PRUDPPacket, socket: &SocketData, connection: &mut ConnectionData, rmcresponse: RMCResponse){
 
-    let ConnectionData{
-        active_connection_data,
-        ..
-    } = connection;
-
-    let Some(active_connection) = active_connection_data else {
-        return;
+pub async fn send_result(
+    connection: &SendingConnection,
+    result: Result<Vec<u8>, ErrorCode>,
+    protocol_id: u8,
+    method_id: u32,
+    call_id: u32,
+) {
+   
+    println!("{}", hex::encode(result.clone().unwrap()));
+    let response_result = match result {
+        Ok(v) => RMCResponseResult::Success {
+            call_id,
+            method_id,
+            data: v
+        },
+        Err(e) =>
+            RMCResponseResult::Error {
+                call_id,
+                error_code: e.into()
+            }
     };
 
-    let mut packet = original_packet.base_response_packet();
+    let response = RMCResponse{
+        response_result,
+        protocol_id
+    };
 
-
-    packet.header.types_and_flags.set_types(DATA);
-    packet.header.types_and_flags.set_flag((original_packet.header.types_and_flags.get_flags() & RELIABLE) | NEED_ACK);
-
-    packet.header.session_id = active_connection.server_session_id;
-    packet.header.substream_id = 0;
-
-    packet.options.push(FragmentId(0));
-
-    packet.payload = rmcresponse.to_data();
-
-    //tokio::time::sleep(Duration::from_millis(500)).await;
-
-    connection.finish_and_send_packet_to(socket, packet).await;
+    send_response(connection, response).await
 }
+
+pub async fn send_response(connection: &SendingConnection, rmcresponse: RMCResponse) {
+    connection.send(rmcresponse.to_data()).await;
+}
+
 
 //taken from kinnays error list directly
 #[allow(nonstandard_style)]
 #[repr(u32)]
+#[derive(Debug, EnumTryInto, Clone, Copy)]
 pub enum ErrorCode {
     Core_Unknown = 0x00010001,
     Core_NotImplemented = 0x00010002,
@@ -379,25 +457,25 @@ pub enum ErrorCode {
     Custom_Unknown = 0x00740001,
     Ess_Unknown = 0x00750001,
     Ess_GameSessionError = 0x00750002,
-    Ess_GameSessionMaintenance = 0x00750003
+    Ess_GameSessionMaintenance = 0x00750003,
 }
 
-impl Into<u32> for ErrorCode  {
+impl Into<u32> for ErrorCode {
     fn into(self) -> u32 {
-        unsafe{ transmute(self) }
+        unsafe { transmute(self) }
     }
 }
 
 #[cfg(test)]
-mod test{
+mod test {
     use hmac::digest::consts::U5;
     use hmac::digest::KeyInit;
     use rc4::{Rc4, StreamCipher};
     use crate::rmc::response::ErrorCode;
 
     #[test]
-    fn test(){
-        let mut data_orig = [0,1,2,3,4,5,6,7,8,9,69,4,20];
+    fn test() {
+        let mut data_orig = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 69, 4, 20];
         let mut data = data_orig;
 
         let mut rc4: Rc4<U5> =
@@ -413,11 +491,10 @@ mod test{
         rc4.apply_keystream(&mut data);
 
         assert_eq!(data_orig, data);
-
     }
 
     #[test]
-    fn test_enum_equivilance(){
+    fn test_enum_equivilance() {
         let val: u32 = ErrorCode::Core_Unknown.into();
         assert_eq!(val, 0x00010001)
     }

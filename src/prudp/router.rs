@@ -11,7 +11,7 @@ use once_cell::sync::Lazy;
 use log::{error, info, trace};
 use thiserror::Error;
 use tokio::sync::RwLock;
-use crate::prudp::socket::SocketData;
+use crate::prudp::socket::{new_socket_pair, AnyInternalSocket, CryptoHandler, ExternalSocket};
 use crate::prudp::packet::{PRUDPPacket, VirtualPort};
 use crate::prudp::router::Error::VirtualPortTaken;
 
@@ -22,10 +22,9 @@ static SERVER_DATAGRAMS: Lazy<u8> = Lazy::new(||{
 });
 
 pub struct Router {
-    endpoints: RwLock<[Option<Arc<SocketData>>; 16]>,
+    endpoints: RwLock<[Option<Arc<dyn AnyInternalSocket>>; 16]>,
     running: AtomicBool,
     socket: Arc<UdpSocket>,
-    //pub auth_module: Arc<dyn AuthModule>
     _no_outside_construction: PhantomData<()>
 }
 #[derive(Debug, Error)]
@@ -36,9 +35,6 @@ pub enum Error{
 
 
 impl Router {
-    fn process_prudp_packet(&self, _packet: &PRUDPPacket){
-
-    }
     async fn process_prudp_packets<'a>(self: Arc<Self>, _socket: Arc<UdpSocket>, addr: SocketAddrV4, udp_message: Vec<u8>){
         let mut stream = Cursor::new(&udp_message);
 
@@ -54,6 +50,7 @@ impl Router {
             trace!("got valid prudp packet from someone({}): \n{:?}", addr, packet);
 
             let connection = packet.source_sockaddr(addr);
+            
 
             let endpoints = self.endpoints.read().await;
 
@@ -69,7 +66,9 @@ impl Router {
 
             trace!("sending packet to endpoint");
 
-            endpoint.process_packet(connection, &packet).await;
+            tokio::spawn(async move {
+                endpoint.recieve_packet(connection, packet).await
+            });
         }
     }
 
@@ -87,6 +86,7 @@ impl Router {
                 error!("somehow got ipv6 packet...? ignoring");
                 continue;
             };
+
 
             let current_msg = &msg_buffer[0..len];
 
@@ -144,18 +144,22 @@ impl Router {
     }
 
     // returns Some(()) i
-    pub(crate) async fn add_socket(&self, socket: Arc<SocketData>) -> Result<(), Error>{
+    pub(crate) async fn add_socket<E: CryptoHandler>(&self, virtual_port: VirtualPort, encryption: E)
+        -> Result<ExternalSocket, Error>{
         let mut endpoints = self.endpoints.write().await;
 
-        let idx = socket.get_virual_port().get_port_number() as usize;
+        let idx = virtual_port.get_port_number() as usize;
 
-        if endpoints[idx].is_none() {
-            endpoints[idx] = Some(socket);
-        } else {
+        // dont create the socket if we dont need to
+        if !endpoints[idx].is_none(){
             return Err(VirtualPortTaken(idx as u8));
         }
 
-        Ok(())
+        let (internal, external) = new_socket_pair(virtual_port, encryption, self.socket.clone());
+
+        endpoints[idx] = Some(internal);
+
+        Ok(external)
     }
 
     pub fn get_own_address(&self) -> SocketAddrV4{

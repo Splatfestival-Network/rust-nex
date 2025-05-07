@@ -5,7 +5,7 @@ use log::error;
 use crate::endianness::{IS_BIG_ENDIAN, ReadExtensions};
 use crate::rmc::response::{ErrorCode, RMCResponseResult};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RMCMessage{
     pub protocol_id: u16,
     pub call_id: u32,
@@ -60,12 +60,14 @@ impl RMCMessage{
 
         output.write_all(bytes_of(&size)).expect("unable to write size");
 
-        let proto_id = self.protocol_id as u8;
+        let proto_id = self.protocol_id as u8 | 0x80;
 
         output.write_all(bytes_of(&proto_id)).expect("unable to write size");
 
         output.write_all(bytes_of(&self.call_id)).expect("unable to write size");
         output.write_all(bytes_of(&self.method_id)).expect("unable to write size");
+
+        output.write_all(&self.rest_of_data).expect("unable to write data");
 
         output
     }

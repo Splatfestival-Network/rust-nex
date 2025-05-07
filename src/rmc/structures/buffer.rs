@@ -1,6 +1,8 @@
 use std::io::{Read, Write};
 use crate::rmc::structures::RmcSerialize;
 
+
+
 impl<'a> RmcSerialize for &'a [u8]{
     fn serialize(&self, writer: &mut dyn Write) -> crate::rmc::structures::Result<()> {
         let u32_size = self.len() as u32;

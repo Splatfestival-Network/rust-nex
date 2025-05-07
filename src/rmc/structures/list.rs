@@ -4,6 +4,9 @@ use crate::endianness::{IS_BIG_ENDIAN, ReadExtensions};
 use crate::rmc::structures::RmcSerialize;
 
 
+
+// this is also for implementing `Buffer` this is tecnically not the same as its handled internaly 
+// probably but as it has the same mapping it doesn't matter and simplifies things
 impl<T: RmcSerialize> RmcSerialize for Vec<T>{
     fn serialize(&self, writer: &mut dyn Write) -> crate::rmc::structures::Result<()> {
         let u32_len = self.len() as u32;

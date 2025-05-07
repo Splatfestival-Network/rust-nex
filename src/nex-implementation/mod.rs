@@ -6,7 +6,6 @@ use log::warn;
 use once_cell::sync::Lazy;
 use tokio::sync::Mutex;
 use crate::grpc;
-use crate::prudp::socket::{ConnectionData, SocketData};
 use crate::rmc::message::RMCMessage;
 use crate::rmc::response::{ErrorCode, RMCResponse};
 
@@ -17,7 +16,8 @@ pub mod secure;
 pub mod matchmake_extension;
 pub mod matchmake_common;
 pub mod matchmake;
-mod notification;
+pub mod notification;
+pub mod nat_traversal;
 
 static IS_MAINTENANCE: Lazy<bool> = Lazy::new(|| {
     env::var("IS_MAINTENANCE")

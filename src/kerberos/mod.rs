@@ -25,7 +25,7 @@ pub fn derive_key(pid: u32, password: [u8; 16]) -> [u8; 16]{
 
     key
 }
-#[derive(Pod, Zeroable, Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Pod, Zeroable, Copy, Clone, Debug, Eq, PartialEq, Default)]
 #[repr(transparent)]
 pub struct KerberosDateTime(pub u64);
 
@@ -66,7 +66,7 @@ impl KerberosDateTime{
 
     #[inline]
     pub fn get_month(&self) -> u8{
-        ((self.0 >> 22) & 0b111111) as u8
+        ((self.0 >> 22) & 0b1111) as u8
     }
 
     #[inline]
@@ -152,5 +152,19 @@ impl Ticket{
         data.write_all(&hmac_result).expect("failed to write data to vec");
 
         data.into_boxed_slice()
+    }
+}
+
+
+#[cfg(test)]
+mod test{
+    use chrono::{Datelike, Utc};
+    use crate::kerberos::KerberosDateTime;
+
+    #[test]
+    fn kerberos_time_convert_test(){
+        let time = KerberosDateTime(135904948834);
+
+        println!("{}", time.to_regular_time().to_rfc2822());
     }
 }

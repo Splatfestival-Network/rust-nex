@@ -3,7 +3,7 @@ use crate::kerberos::KerberosDateTime;
 use crate::rmc::structures::variant::Variant;
 
 // rmc structure
-#[derive(RmcSerialize, Debug, Clone)]
+#[derive(RmcSerialize, Debug, Clone, Default)]
 #[rmc_struct(0)]
 pub struct Gathering {
     pub self_gid: u32,
@@ -19,7 +19,7 @@ pub struct Gathering {
 }
 
 // rmc structure
-#[derive(RmcSerialize, Debug, Clone)]
+#[derive(RmcSerialize, Debug, Clone, Default)]
 #[rmc_struct(0)]
 pub struct MatchmakeParam {
     pub params: Vec<(String, Variant)>,
@@ -27,7 +27,7 @@ pub struct MatchmakeParam {
 
 
 // rmc structure
-#[derive(RmcSerialize, Debug, Clone)]
+#[derive(RmcSerialize, Debug, Clone, Default)]
 #[rmc_struct(3)]
 pub struct MatchmakeSession {
     //inherits from
@@ -81,4 +81,16 @@ pub struct AutoMatchmakeParam {
     pub participation_count: u16,
     pub search_criteria: Vec<MatchmakeSessionSearchCriteria>,
     pub target_gids: Vec<u32>,
+}
+
+#[derive(RmcSerialize, Debug, Clone)]
+#[rmc_struct(0)]
+pub struct CreateMatchmakeSessionParam {
+    pub matchmake_session: MatchmakeSession,
+    pub additional_participants: Vec<u32>,
+    pub gid_for_participation_check: u32,
+    pub create_matchmake_session_option: u32,
+    pub join_message: String,
+    pub participation_count: u16,
+
 }

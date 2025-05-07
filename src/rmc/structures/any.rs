@@ -2,15 +2,24 @@ use std::io::{Read, Write};
 use crate::endianness::{IS_BIG_ENDIAN, ReadExtensions};
 use super::{Result, RmcSerialize};
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Any{
     pub name: String,
     pub data: Vec<u8>
 }
 
 impl RmcSerialize for Any{
-    fn serialize(&self, _writer: &mut dyn Write) -> Result<()> {
-        todo!()
+    fn serialize(&self, writer: &mut dyn Write) -> Result<()> {
+        self.name.serialize(writer)?;
+
+        let u32_len = self.data.len() as u32;
+
+        u32_len.serialize(writer)?;
+        u32_len.serialize(writer)?;
+
+        self.data.serialize(writer)?;
+
+        Ok(())
     }
     fn deserialize(mut reader: &mut dyn Read) -> Result<Self> {
         let name = String::deserialize(reader)?;

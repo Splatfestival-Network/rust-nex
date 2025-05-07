@@ -17,7 +17,7 @@ pub enum Error{
     VersionMismatch(u8),
 }
 
-pub(crate) type Result<T> = std::result::Result<T, Error>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 pub mod string;
 pub mod any;
@@ -30,8 +30,18 @@ pub mod qbuffer;
 pub mod primitives;
 pub mod matchmake;
 pub mod variant;
+pub mod ranking;
 
 pub trait RmcSerialize: Sized{
     fn serialize(&self, writer: &mut dyn Write) -> Result<()>;
     fn deserialize(reader: &mut dyn Read) -> Result<Self>;
+}
+
+impl RmcSerialize for (){
+    fn serialize(&self, writer: &mut dyn Write) -> Result<()> {
+        Ok(())
+    }
+    fn deserialize(reader: &mut dyn Read) -> Result<Self> {
+        Ok(())
+    }
 }

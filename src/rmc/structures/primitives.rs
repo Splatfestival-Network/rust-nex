@@ -92,3 +92,111 @@ impl<T: RmcSerialize, U: RmcSerialize> RmcSerialize for (T, U){
         Ok((first, second))
     }
 }
+
+impl<T: RmcSerialize, U: RmcSerialize, V: RmcSerialize> RmcSerialize for (T, U, V){
+    fn serialize(&self, writer: &mut dyn Write) -> crate::rmc::structures::Result<()> {
+        self.0.serialize(writer)?;
+        self.1.serialize(writer)?;
+        self.2.serialize(writer)?;
+        Ok(())
+    }
+
+    fn deserialize(reader: &mut dyn Read) -> crate::rmc::structures::Result<Self> {
+        let first = T::deserialize(reader)?;
+        let second = U::deserialize(reader)?;
+        let third = V::deserialize(reader)?;
+
+        Ok((first, second, third))
+    }
+}
+
+impl<T: RmcSerialize, U: RmcSerialize, V: RmcSerialize, W: RmcSerialize> RmcSerialize for (T, U, V, W){
+    fn serialize(&self, writer: &mut dyn Write) -> crate::rmc::structures::Result<()> {
+        self.0.serialize(writer)?;
+        self.1.serialize(writer)?;
+        self.2.serialize(writer)?;
+        self.3.serialize(writer)?;
+        Ok(())
+    }
+
+    fn deserialize(reader: &mut dyn Read) -> crate::rmc::structures::Result<Self> {
+        let first = T::deserialize(reader)?;
+        let second = U::deserialize(reader)?;
+        let third = V::deserialize(reader)?;
+        let fourth = W::deserialize(reader)?;
+
+        Ok((first, second, third, fourth))
+    }
+}
+
+impl<T: RmcSerialize, U: RmcSerialize, V: RmcSerialize, W: RmcSerialize, X: RmcSerialize> RmcSerialize for (T, U, V, W, X){
+    fn serialize(&self, writer: &mut dyn Write) -> crate::rmc::structures::Result<()> {
+        self.0.serialize(writer)?;
+        self.1.serialize(writer)?;
+        self.2.serialize(writer)?;
+        self.3.serialize(writer)?;
+        self.4.serialize(writer)?;
+
+        Ok(())
+    }
+
+    fn deserialize(reader: &mut dyn Read) -> crate::rmc::structures::Result<Self> {
+        let first = T::deserialize(reader)?;
+        let second = U::deserialize(reader)?;
+        let third = V::deserialize(reader)?;
+        let fourth = W::deserialize(reader)?;
+        let fifth = X::deserialize(reader)?;
+
+        Ok((first, second, third, fourth, fifth))
+    }
+}
+
+impl<T: RmcSerialize, U: RmcSerialize, V: RmcSerialize, W: RmcSerialize, X: RmcSerialize, Y: RmcSerialize> RmcSerialize for (T, U, V, W, X, Y){
+    fn serialize(&self, writer: &mut dyn Write) -> crate::rmc::structures::Result<()> {
+        self.0.serialize(writer)?;
+        self.1.serialize(writer)?;
+        self.2.serialize(writer)?;
+        self.3.serialize(writer)?;
+        self.4.serialize(writer)?;
+        self.5.serialize(writer)?;
+
+        Ok(())
+    }
+
+    fn deserialize(reader: &mut dyn Read) -> crate::rmc::structures::Result<Self> {
+        let first = T::deserialize(reader)?;
+        let second = U::deserialize(reader)?;
+        let third = V::deserialize(reader)?;
+        let fourth = W::deserialize(reader)?;
+        let fifth = X::deserialize(reader)?;
+        let sixth = Y::deserialize(reader)?;
+
+        Ok((first, second, third, fourth, fifth, sixth))
+    }
+}
+
+impl<T: RmcSerialize, U: RmcSerialize, V: RmcSerialize, W: RmcSerialize, X: RmcSerialize, Y: RmcSerialize, Z: RmcSerialize> RmcSerialize for (T, U, V, W, X, Y, Z){
+    fn serialize(&self, writer: &mut dyn Write) -> crate::rmc::structures::Result<()> {
+        self.0.serialize(writer)?;
+        self.1.serialize(writer)?;
+        self.2.serialize(writer)?;
+        self.3.serialize(writer)?;
+        self.4.serialize(writer)?;
+        self.5.serialize(writer)?;
+        self.6.serialize(writer)?;
+
+        Ok(())
+    }
+
+    fn deserialize(reader: &mut dyn Read) -> crate::rmc::structures::Result<Self> {
+        let first = T::deserialize(reader)?;
+        let second = U::deserialize(reader)?;
+        let third = V::deserialize(reader)?;
+        let fourth = W::deserialize(reader)?;
+        let fifth = X::deserialize(reader)?;
+        let sixth = Y::deserialize(reader)?;
+        let seventh = Z::deserialize(reader)?;
+
+        Ok((first, second, third, fourth, fifth, sixth, seventh))
+    }
+}
