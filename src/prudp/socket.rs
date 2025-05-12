@@ -67,7 +67,8 @@ struct InternalConnection<E: CryptoHandlerConnectionInstance> {
     // maybe add connection id(need to see if its even needed)
     crypto_handler_instance: E,
     data_sender: Sender<Vec<u8>>,
-    socket: Arc<UdpSocket>
+    socket: Arc<UdpSocket>,
+    packet_queue: HashMap<u16, PRUDPPacket>,
 }
 
 impl<E: CryptoHandlerConnectionInstance> Deref for InternalConnection<E>{
@@ -82,7 +83,7 @@ impl<E: CryptoHandlerConnectionInstance> InternalConnection<E>{
         let prev_val = self.reliable_server_counter;
         let (val, _) = self.reliable_server_counter.overflowing_add(1);
         self.reliable_server_counter = val;
-        println!("{}", prev_val);
+
         prev_val
     }
 }
@@ -193,9 +194,7 @@ impl<T: CryptoHandlerConnectionInstance> AnyInternalConnection for InternalConne
         packet
             .write_to(&mut vec)
             .expect("somehow failed to convert backet to bytes");
-
-        println!("{}", hex::encode(&vec));
-
+        
         self.socket
             .send_to(&vec, self.socket_addr.regular_socket_addr)
             .await
@@ -294,6 +293,7 @@ impl<T: CryptoHandler> InternalSocket<T> {
         crypto_handler_instance: T::CryptoConnectionInstance,
         socket_addr: PRUDPSockAddr,
         session_id: u8,
+        is_instantiator: bool,
     ) {
         let common = Arc::new(CommonConnection {
             user_id: crypto_handler_instance.get_user_id(),
@@ -307,10 +307,11 @@ impl<T: CryptoHandler> InternalSocket<T> {
         let internal = InternalConnection {
             common: common.clone(),
             crypto_handler_instance,
-            reliable_client_counter: 2,
-            reliable_server_counter: 1,
+            reliable_client_counter: if is_instantiator { 1 } else { 2 } ,
+            reliable_server_counter: if is_instantiator { 2 } else { 1 },
             data_sender: data_sender_from_client,
-            socket: self.socket.clone()
+            socket: self.socket.clone(),
+            packet_queue: Default::default()
         };
 
         let internal = Arc::new(Mutex::new(internal));
@@ -325,10 +326,6 @@ impl<T: CryptoHandler> InternalSocket<T> {
             data_receiver: data_receiver_from_client,
 
         };
-
-
-
-
 
         let mut connections = self.internal_connections.lock().await;
 
@@ -411,7 +408,7 @@ impl<T: CryptoHandler> InternalSocket<T> {
 
         //println!("connect out: {:?}", response);
 
-        self.create_connection(crypto, address, session_id).await;
+        self.create_connection(crypto, address, session_id, false).await;
 
         self.send_packet_unbuffered(address, response).await;
     }
@@ -428,28 +425,34 @@ impl<T: CryptoHandler> InternalSocket<T> {
             error!("tried to send data on inactive connection!");
             return
         };
+
         let conn = conn.clone();
         drop(connections);
 
+        println!("recieved packed id: {}", packet.header.sequence_id);
+
         let mut conn = conn.lock().await;
 
-        conn.crypto_handler_instance.decrypt_incoming(packet.header.substream_id, &mut packet.payload[..]);
+        conn.packet_queue.insert(packet.header.sequence_id, packet);
 
-        let mut data = Vec::new();
+        let mut counter = conn.reliable_client_counter;
 
-        mem::swap(&mut data, &mut packet.payload);
+        while let Some(mut packet) = conn.packet_queue.remove(&counter) {
+            conn.crypto_handler_instance.decrypt_incoming(packet.header.substream_id, &mut packet.payload[..]);
 
-        let mut response = packet.base_acknowledgement_packet();
-        response.header.types_and_flags.set_flag(HAS_SIZE | ACK);
-        response.header.session_id = conn.session_id;
+            let mut response = packet.base_acknowledgement_packet();
+            response.header.types_and_flags.set_flag(HAS_SIZE | ACK);
+            response.header.session_id = conn.session_id;
 
-        conn.crypto_handler_instance.sign_packet(&mut response);
+            conn.crypto_handler_instance.sign_packet(&mut response);
 
-        self.send_packet_unbuffered(address, response).await;
+            self.send_packet_unbuffered(address, response).await;
 
-        conn.data_sender.send(data).await.ok();
+            conn.data_sender.send(packet.payload).await.ok();
 
-
+            conn.reliable_client_counter = conn.reliable_client_counter.overflowing_add(1).0;
+            counter = conn.reliable_client_counter;
+        }
     }
 
     async fn handle_ping(&self, address: PRUDPSockAddr, packet: PRUDPPacket){
@@ -615,7 +618,7 @@ impl<T: CryptoHandler> AnyInternalSocket for InternalSocket<T> {
         let (_, crypt) = self.crypto_handler.instantiate(remote_signature, *own_signature, &[], 1)?;
 
         //todo: make this work for secure servers as well
-        self.create_connection(crypt, address, 0).await;
+        self.create_connection(crypt, address, 0, true).await;
 
         Some(())
     }

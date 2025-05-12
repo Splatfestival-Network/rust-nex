@@ -32,8 +32,6 @@ impl RMCProtocolServer{
             error!("error reading rmc message");
             return;
         };
-
-        println!("got rmc message {},{}", rmc.protocol_id, rmc.method_id);
         
         for proto in &self.0 {
             if let Some(response) = proto(&rmc, &socket, &connection).await {

@@ -1,7 +1,7 @@
 use proc_macro2::{Ident, Span, TokenStream, TokenTree};
 use quote::{quote, ToTokens};
-use syn::{LitInt, ReturnType, Token, Type};
-use syn::token::{Brace, Paren, Semi};
+use syn::{LitInt, LitStr, ReturnType, Token, Type};
+use syn::token::{Brace, Bracket, Paren, Semi};
 
 pub struct ProtoMethodData{
     pub id: LitInt,
@@ -61,9 +61,11 @@ impl RmcProtocolData{
                     quote!{ &self, data: ::std::vec::Vec<u8> }.to_tokens(tokens);
                 });
 
-                quote!{
-                    -> ::core::result::Result<Vec<u8>, ErrorCode>
-                }.to_tokens(tokens);
+                if self.has_returns {
+                    quote! {
+                        -> ::core::result::Result<Vec<u8>, ErrorCode>
+                    }.to_tokens(tokens);
+                }
 
                 Brace::default().surround(tokens, |tokens|{
                     quote! { let mut cursor = ::std::io::Cursor::new(data); }.to_tokens(tokens);
@@ -73,10 +75,27 @@ impl RmcProtocolData{
                             let Ok(#param_name) =
                                 <#param_type as crate::rmc::structures::RmcSerialize>::deserialize(
                                 &mut cursor
-                            ) else {
-                                return Err(crate::rmc::response::ErrorCode::Core_InvalidArgument);
-                            };
-                        }.to_tokens(tokens)
+                            ) else
+                        }.to_tokens(tokens);
+
+                        let error_msg = LitStr::new(&format!("an error occurred whilest deserializing {}", param_name), Span::call_site());
+
+                        if self.has_returns {
+                            quote! {
+                                {
+                                    log::error!(#error_msg);
+                                    return Err(crate::rmc::response::ErrorCode::Core_InvalidArgument);
+                                };
+                            }.to_tokens(tokens)
+                        } else {
+                            quote! {
+                                {
+                                    log::error!(#error_msg);
+                                    return;
+                                };
+                            }.to_tokens(tokens)
+                        }
+
                     }
 
                     quote!{
@@ -129,13 +148,28 @@ impl RmcProtocolData{
 
                         let raw_name = Ident::new(&format!("raw_{}", name), name.span());
 
+
                         quote!{
                             #id => self.#raw_name(data).await,
                         }.to_tokens(tokens);
                     }
                     quote!{
-                        _ => Err(crate::rmc::response::ErrorCode::Core_NotImplemented)
+                        v =>
                     }.to_tokens(tokens);
+
+
+
+                    Brace::default().surround(tokens, |tokens|{
+                        quote!{
+                            log::error!("(protocol {})unimplemented method id called on protocol: {}", #id, v);
+                        }.to_tokens(tokens);
+                        if self.has_returns {
+                            quote! {
+                                Err(crate::rmc::response::ErrorCode::Core_NotImplemented)
+                            }.to_tokens(tokens);
+                        }
+                    });
+
                 });
 
                 Semi::default().to_tokens(tokens);
@@ -155,7 +189,7 @@ impl RmcProtocolData{
         });
 
         quote!{
-            impl<T: #name> RawAuth for T{}
+            impl<T: #name> #raw_name for T{}
         }.to_tokens(tokens);
     }
 
@@ -218,8 +252,17 @@ impl RmcProtocolData{
                                     &#param_name,
                                     &mut cursor
                                 )
-                            ).ok_or(crate::rmc::response::ErrorCode::Core_InvalidArgument)?;
-                        }.to_tokens(tokens)
+                            ).ok_or(crate::rmc::response::ErrorCode::Core_InvalidArgument)
+                        }.to_tokens(tokens);
+                        if self.has_returns {
+                            quote! {
+                                ?;
+                            }.to_tokens(tokens)
+                        } else {
+                            quote! {
+                                ;
+                            }.to_tokens(tokens)
+                        }
                     }
 
                     quote!{

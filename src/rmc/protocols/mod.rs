@@ -2,6 +2,10 @@
 
 pub mod auth;
 pub mod secure;
+pub mod notifications;
+pub mod matchmake;
+pub mod matchmake_extension;
+pub mod nat_traversal;
 
 use crate::prudp::socket::{ExternalConnection, SendingConnection};
 use crate::rmc::message::RMCMessage;
@@ -261,7 +265,7 @@ async fn handle_incoming<T: RmcCallable + Send + Sync + 'static>(
                 rest_of_data
             } = message;
 
-            info!("got rmc request, handeling it now...");
+            info!("RMC REQUEST: Proto: {}; Method: {};", protocol_id, method_id);
 
             remote.rmc_call(&sending_conn, protocol_id, method_id, call_id, rest_of_data).await; 
 
@@ -272,7 +276,7 @@ async fn handle_incoming<T: RmcCallable + Send + Sync + 'static>(
 
 pub fn new_rmc_gateway_connection<T: RmcCallable + Sync + Send + 'static,F>(conn: ExternalConnection, create_internal: F) -> Arc<T>
 where
-    F: FnOnce(RmcConnection) -> T,
+    F: FnOnce(RmcConnection) -> Arc<T>,
 {
     let notify = Arc::new(Notify::new());
     let incoming: Arc<Mutex<HashMap<u32, RMCResponse>>> = Default::default();
@@ -284,8 +288,6 @@ where
     let rmc_conn = RmcConnection(sending_conn, response_recv);
 
     let exposed_object = (create_internal)(rmc_conn);
-
-    let exposed_object = Arc::new(exposed_object);
 
     {
         let exposed_object = exposed_object.clone();

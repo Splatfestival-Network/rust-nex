@@ -15,6 +15,8 @@ pub enum Error{
     UnexpectedValue(u64),
     #[error("version mismatch: {0}")]
     VersionMismatch(u8),
+    #[error("an error occurred reading the station url")]
+    StationUrlInvalid
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

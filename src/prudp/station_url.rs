@@ -1,9 +1,13 @@
 use std::net::Ipv4Addr;
 use log::error;
-use std::fmt::{Display, Formatter, Write};
+use std::fmt::{Debug, Display, Formatter, Write};
+use std::io::Read;
+use rocket::delete;
 use crate::prudp::station_url::Type::{PRUDP, PRUDPS, UDP};
-use crate::prudp::station_url::UrlOptions::{Address, ConnectionID, NatFiltering, NatMapping, NatType, Platform, PMP, Port, PrincipalID, RVConnectionID, StreamID, StreamType, UPNP};
-
+use crate::prudp::station_url::UrlOptions::{Address, ConnectionID, NatFiltering, NatMapping, NatType, Platform, PMP, Port, PrincipalID, RVConnectionID, StreamID, StreamType, UPNP, PID};
+use crate::rmc::structures::Error::StationUrlInvalid;
+use crate::rmc::structures::RmcSerialize;
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Type{
     UDP,
     PRUDP,
@@ -15,6 +19,7 @@ pub mod nat_types{
     pub const PUBLIC: u8 = 2;
 }
 
+#[derive(Clone, Eq, PartialEq)]
 pub enum UrlOptions {
     Address(Ipv4Addr),
     Port(u16),
@@ -29,16 +34,18 @@ pub enum UrlOptions {
     RVConnectionID(u32),
     Platform(u8),
     PMP(u8),
+    PID(u32),
 
 }
 
+#[derive(Clone, PartialEq, Eq)]
 pub struct StationUrl{
     pub url_type: Type,
     pub options: Vec<UrlOptions>
 }
 
 impl StationUrl{
-    fn read_options(options: &str) -> Option<Vec<UrlOptions>>{
+    pub fn read_options(options: &str) -> Option<Vec<UrlOptions>>{
         let mut options_out = Vec::new();
 
         for option in options.split(';'){
@@ -75,12 +82,21 @@ impl StationUrl{
                 "RVCID" => {
                     options_out.push(RVConnectionID(option_value.parse().ok()?))
                 }
+                "rvcid" => {
+                    options_out.push(RVConnectionID(option_value.parse().ok()?))
+                }
                 "pl" => {
                     options_out.push(Platform(option_value.parse().ok()?))
                 }
                 "pmp" => {
                     options_out.push(PMP(option_value.parse().ok()?))
-                }
+                },
+                "pid" => {
+                    options_out.push(PID(option_value.parse().ok()?))
+                },
+                "PID" => {
+                    options_out.push(PID(option_value.parse().ok()?))
+                },
                 _ => {
                     error!("unimplemented option type, skipping: {}", option_name);
                 }
@@ -143,10 +159,12 @@ impl<'a> Into<String> for &'a StationUrl{
                 RVConnectionID(v) => write!(url, "RVCID={}", v).expect("failed to write"),
                 Platform(v) => write!(url, "pl={}", v).expect("failed to write"),
                 PMP(v) => write!(url, "pmp={}", v).expect("failed to write"),
+                PID(v) => write!(url, "PID={}", v).expect("failed to write"),
             }
+            write!(url, ";").expect("failed to write");
         }
 
-        url
+        url[0..url.len()-1].into()
     }
 }
 
@@ -158,4 +176,24 @@ impl Display for StationUrl{
     }
 
 
+}
+
+impl RmcSerialize for StationUrl{
+    fn deserialize(reader: &mut dyn Read) -> crate::rmc::structures::Result<Self> {
+        let str = String::deserialize(reader)?;
+
+        Self::try_from(str.as_str()).map_err(|_| StationUrlInvalid)
+    }
+    fn serialize(&self, writer: &mut dyn std::io::Write) -> crate::rmc::structures::Result<()> {
+        let str: String = self.into();
+
+        str.serialize(writer)
+    }
+}
+
+impl Debug for StationUrl{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let str: String = self.into();
+        f.write_str(&str)
+    }
 }

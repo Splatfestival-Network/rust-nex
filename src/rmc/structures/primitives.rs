@@ -13,6 +13,16 @@ impl RmcSerialize for u8{
     }
 }
 
+impl RmcSerialize for i8{
+    fn serialize(&self, writer: &mut dyn Write) -> crate::rmc::structures::Result<()> {
+        Ok(writer.write_all(bytes_of(self))?)
+    }
+
+    fn deserialize(mut reader: &mut dyn Read) -> crate::rmc::structures::Result<Self> {
+        Ok(reader.read_struct(IS_BIG_ENDIAN)?)
+    }
+}
+
 impl RmcSerialize for u16{
     fn serialize(&self, writer: &mut dyn Write) -> crate::rmc::structures::Result<()> {
         Ok(writer.write_all(bytes_of(self))?)
@@ -23,7 +33,27 @@ impl RmcSerialize for u16{
     }
 }
 
+impl RmcSerialize for i16{
+    fn serialize(&self, writer: &mut dyn Write) -> crate::rmc::structures::Result<()> {
+        Ok(writer.write_all(bytes_of(self))?)
+    }
+
+    fn deserialize(mut reader: &mut dyn Read) -> crate::rmc::structures::Result<Self> {
+        Ok(reader.read_struct(IS_BIG_ENDIAN)?)
+    }
+}
+
 impl RmcSerialize for u32{
+    fn serialize(&self, writer: &mut dyn Write) -> crate::rmc::structures::Result<()> {
+        Ok(writer.write_all(bytes_of(self))?)
+    }
+
+    fn deserialize(mut reader: &mut dyn Read) -> crate::rmc::structures::Result<Self> {
+        Ok(reader.read_struct(IS_BIG_ENDIAN)?)
+    }
+}
+
+impl RmcSerialize for i32{
     fn serialize(&self, writer: &mut dyn Write) -> crate::rmc::structures::Result<()> {
         Ok(writer.write_all(bytes_of(self))?)
     }
