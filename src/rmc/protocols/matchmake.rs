@@ -8,4 +8,7 @@ pub trait Matchmake{
     async fn unregister_gathering(&self, gid: u32) -> Result<bool, ErrorCode>;
     #[method_id(41)]
     async fn get_session_urls(&self, gid: u32) -> Result<Vec<StationUrl>, ErrorCode>;
+
+    #[method_id(42)]
+    async fn update_session_host(&self, gid: u32, change_owner: bool) -> Result<(), ErrorCode>;
 }

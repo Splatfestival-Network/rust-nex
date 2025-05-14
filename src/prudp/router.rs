@@ -47,8 +47,6 @@ impl Router {
                 },
             };
 
-            trace!("got valid prudp packet from someone({}): \n{:?}", addr, packet);
-
             let connection = packet.source_sockaddr(addr);
             
 
@@ -63,8 +61,7 @@ impl Router {
 
             // Dont keep the locked structure for too long
             drop(endpoints);
-
-            trace!("sending packet to endpoint");
+            
 
             tokio::spawn(async move {
                 endpoint.recieve_packet(connection, packet).await
@@ -95,7 +92,7 @@ impl Router {
     }
     
     pub async fn new(addr: SocketAddrV4) -> io::Result<(Arc<Self>, JoinHandle<()>)>{
-        trace!("starting router on {}", addr);
+        // trace!("starting router on {}", addr);
 
         let socket = Arc::new(UdpSocket::bind(addr).await?);
 

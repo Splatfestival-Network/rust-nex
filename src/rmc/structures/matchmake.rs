@@ -1,6 +1,6 @@
-use macros::RmcSerialize;
 use crate::kerberos::KerberosDateTime;
 use crate::rmc::structures::variant::Variant;
+use macros::RmcSerialize;
 
 // rmc structure
 #[derive(RmcSerialize, Debug, Clone, Default)]
@@ -24,7 +24,6 @@ pub struct Gathering {
 pub struct MatchmakeParam {
     pub params: Vec<(String, Variant)>,
 }
-
 
 // rmc structure
 #[derive(RmcSerialize, Debug, Clone, Default)]
@@ -97,7 +96,7 @@ pub struct CreateMatchmakeSessionParam {
 #[derive(RmcSerialize, Debug, Clone)]
 #[rmc_struct(0)]
 pub struct MatchmakeBlockListParam {
-    option_flag: u32
+    option_flag: u32,
 }
 
 #[derive(RmcSerialize, Debug, Clone)]
@@ -114,4 +113,14 @@ pub struct JoinMatchmakeSessionParam {
     pub participation_count: u16,
     //pub extra_participant: u16,
     //pub block_list_param: MatchmakeBlockListParam
+}
+
+pub mod gathering_flags {
+    pub const PERSISTENT_GATHERING: u32 = 0x1;
+    pub const DISCONNECT_CHANGE_OWNER: u32 = 0x10;
+    pub const PERSISTENT_GATHERING_LEAVE_PARTICIPATION: u32 = 0x40;
+    pub const PERSISTENT_GATHERING_ALLOW_ZERO_USERS: u32 = 0x80;
+    pub const PARTICIPANTS_CHANGE_OWNER: u32 = 0x200;
+    pub const VERBOSE_PARTICIPANTS: u32 = 0x400;
+    pub const VERBOSE_PARTICIPANTS_EX: u32 = 0x800;
 }

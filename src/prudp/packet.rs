@@ -340,8 +340,7 @@ impl PRUDPPacket {
 
             options.push(PacketOption::from(option_id, &option_data)?);
         }
-
-        trace!("reading payload");
+        
         let mut payload = vec![0u8; header.payload_size as usize];
 
         reader.read_exact(&mut payload)?;

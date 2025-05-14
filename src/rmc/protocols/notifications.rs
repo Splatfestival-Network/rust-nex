@@ -2,7 +2,12 @@ use macros::{method_id, rmc_proto, rmc_struct, RmcSerialize};
 use crate::rmc::response::ErrorCode;
 use crate::rmc::structures::qresult::QResult;
 
-#[derive(RmcSerialize, Debug)]
+pub mod notification_types{
+    pub const OWNERSHIP_CHANGED: u32 = 4000;
+    pub const HOST_CHANGED: u32 = 110000;
+}
+
+#[derive(RmcSerialize, Debug, Default, Clone)]
 #[rmc_struct(0)]
 pub struct NotificationEvent{
     pub pid_source: u32,
