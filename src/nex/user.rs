@@ -12,6 +12,7 @@ use crate::prudp::station_url::{nat_types, StationUrl, Type};
 use crate::rmc::protocols::matchmake::{
     Matchmake, RawMatchmake, RawMatchmakeInfo, RemoteMatchmake,
 };
+use crate::rmc::protocols::ranking::{Ranking, RawRanking, RawRankingInfo, RemoteRanking};
 use crate::rmc::protocols::matchmake_extension::{
     MatchmakeExtension, RawMatchmakeExtension, RawMatchmakeExtensionInfo, RemoteMatchmakeExtension,
 };
@@ -28,6 +29,7 @@ use std::sync::{Arc, Weak};
 use log::{error, info};
 use rocket::http::ext::IntoCollection;
 use tokio::sync::{Mutex, RwLock};
+use tonic::Code::InvalidArgument;
 use crate::prudp::station_url::nat_types::PUBLIC;
 use crate::rmc::protocols::notifications::{NotificationEvent, RemoteNotification};
 use crate::rmc::response::ErrorCode::{Core_Exception, Core_InvalidArgument, RendezVous_AccountExpired, RendezVous_SessionVoid};
@@ -38,7 +40,8 @@ define_rmc_proto!(
         MatchmakeExtension,
         MatchmakeExt,
         Matchmake,
-        NatTraversal
+        NatTraversal,
+        Ranking
     }
 );
 
@@ -191,6 +194,16 @@ impl MatchmakeExtension for User {
         let mut session = session.lock().await;
 
         session.session.open_participation = false;
+
+        Ok(())
+    }
+
+    async fn open_participation(&self, gid: u32) -> Result<(), ErrorCode> {
+        let session = self.matchmake_manager.get_session(gid).await?;
+
+        let mut session = session.lock().await;
+
+        session.session.open_participation = true;
 
         Ok(())
     }
@@ -360,6 +373,15 @@ impl MatchmakeExtension for User {
 
         Ok(session.session.clone())
     }
+
+    async fn modify_current_game_attribute(&self, gid: u32, attrib_index: u32, attrib_val: u32) -> Result<(), ErrorCode> {
+        let session = self.matchmake_manager.get_session(gid).await?;
+        let mut session = session.lock().await;
+
+        session.session.attributes[attrib_index as usize] = attrib_val;
+
+        Ok(())
+    }
 }
 
 impl Matchmake for User {
@@ -433,6 +455,32 @@ impl Matchmake for User {
 
         Ok(())
     }
+
+    async fn migrate_gathering_ownership(&self, gid: u32, candidates: Vec<u32>, participants_only: bool) -> Result<(), ErrorCode> {
+        let session = self.matchmake_manager.get_session(gid).await?;
+        let mut session = session.lock().await;
+
+        let candidate = candidates.get(0).ok_or(Core_InvalidArgument)?;
+
+        session.session.gathering.owner_pid = *candidate;
+
+        for player in &session.connected_players {
+            let Some(player) = player.upgrade() else {
+                continue;
+            };
+
+            player.remote.process_notification_event(NotificationEvent {
+                notif_type: 4000,
+                pid_source: self.pid,
+                param_1: gid,
+                param_2: *candidate,
+                param_3: 0,
+                str_param: "".to_string(),
+            }).await;
+        }
+
+        Ok(())
+    }
 }
 
 impl MatchmakeExt for User {
@@ -444,6 +492,8 @@ impl MatchmakeExt for User {
 
         Ok(true)
     }
+    
+    
 }
 
 impl NatTraversal for User {
@@ -506,4 +556,8 @@ impl NatTraversal for User {
 
         Ok(())
     }
+}
+
+impl Ranking for User{
+
 }

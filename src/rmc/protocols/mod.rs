@@ -7,6 +7,7 @@ pub mod matchmake;
 pub mod matchmake_extension;
 pub mod nat_traversal;
 pub mod matchmake_ext;
+pub mod ranking;
 
 use crate::prudp::socket::{ExternalConnection, SendingConnection};
 use crate::rmc::message::RMCMessage;
