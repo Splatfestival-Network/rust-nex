@@ -16,9 +16,9 @@ pub trait NatTraversal{
     #[method_id(5)]
     async fn report_nat_properties(&self, nat_mapping: u32, nat_filtering: u32, rtt: u32) -> Result<(),ErrorCode>;
 }
-/*
+
 #[rmc_proto(3, NoReturn)]
 pub trait NatTraversalConsole{
     #[method_id(2)]
-    async fn request_probe_initiation(&self, station_to_probe: String) -> Result<(),ErrorCode>;
-}*/
+    async fn request_probe_initiation(&self, station_to_probe: String);
+}

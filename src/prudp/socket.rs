@@ -709,7 +709,6 @@ impl ExternalConnection{
 
 impl SendingConnection{
     pub async fn send(&self, data: Vec<u8>) -> Option<()> {
-        println!("{}", hex::encode(&data));
         let internal = self.inernal.upgrade()?;
 
         let mut internal = internal.lock().await;

@@ -88,13 +88,13 @@ impl ExtendedMatchmakeSession{
 
         let mm_session = MatchmakeSession{
             gathering: Gathering{
-                self_gid: 1,
+                self_gid: gid,
                 owner_pid: host.pid,
                 host_pid: host.pid,
                 ..session.gathering.clone()
             },
             datetime: KerberosDateTime::now(),
-            session_key: vec![16, 118, 112, 238, 158, 122, 106, 219, 196, 238, 34, 21, 228, 127, 137, 75, 198, 215, 192, 113, 84, 157, 53, 144, 210, 99, 233, 179, 232, 113, 203, 64],//(0..32).map(|_| random()).collect(),
+            session_key: (0..32).map(|_| random()).collect(),
             matchmake_param: MatchmakeParam{
                 params: vec![
                     ("@SR".to_owned(), Variant::Bool(true)),
@@ -124,7 +124,7 @@ impl ExtendedMatchmakeSession{
         }
         self.session.participation_count = self.connected_players.len() as u32;
 
-        for other_connection in &self.connected_players[1..]{
+        for other_connection in &conns[1..]{
             let Some(other_conn) = other_connection.upgrade() else {
                 continue;
             };
@@ -146,7 +146,9 @@ impl ExtendedMatchmakeSession{
             }).await;
         }
 
-        for other_connection in &self.connected_players{
+        let list_of_connected_pids: Vec<_> = self.connected_players.iter().filter_map(|p| p.upgrade()).map(|p| p.pid).collect();
+
+        for other_connection in conns{
             let Some(other_conn) = other_connection.upgrade() else {
                 continue;
             };
@@ -158,14 +160,16 @@ impl ExtendedMatchmakeSession{
                 continue;
             }*/
 
-            other_conn.remote.process_notification_event(NotificationEvent{
-                pid_source: initiating_pid,
-                notif_type: 3001,
-                param_1: self.session.gathering.self_gid,
-                param_2: other_pid,
-                str_param: join_msg.clone(),
-                param_3: self.connected_players.len() as _
-            }).await;
+            for pid in &list_of_connected_pids {
+                other_conn.remote.process_notification_event(NotificationEvent {
+                    pid_source: initiating_pid,
+                    notif_type: 3001,
+                    param_1: self.session.gathering.self_gid,
+                    param_2: *pid,
+                    str_param: join_msg.clone(),
+                    param_3: self.connected_players.len() as _
+                }).await;
+            }
         }
 
         for old_conns in &old_particip{
@@ -173,8 +177,9 @@ impl ExtendedMatchmakeSession{
                 continue;
             };
 
-
             let older_pid = old_conns.pid;
+
+
 
             initiating_user.remote.process_notification_event(NotificationEvent{
                 pid_source: initiating_pid,
