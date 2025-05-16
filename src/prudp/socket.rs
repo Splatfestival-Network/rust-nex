@@ -4,8 +4,6 @@ use crate::prudp::packet::PacketOption::{ConnectionSignature, FragmentId, Initia
 use crate::prudp::packet::{PRUDPHeader, PRUDPPacket, PacketOption, TypesFlags, VirtualPort};
 use crate::prudp::router::{Error, Router};
 use crate::prudp::sockaddr::PRUDPSockAddr;
-use crate::web::DirectionalData::Outgoing;
-use crate::web::WEB_DATA;
 use async_trait::async_trait;
 use hmac::digest::consts::U5;
 use log::info;

@@ -13,9 +13,6 @@ use crate::prudp::socket::{ExternalConnection, SendingConnection};
 use crate::rmc::response::ErrorCode::Core_Exception;
 use crate::rmc::structures::qresult::ERROR_MASK;
 use crate::rmc::structures::RmcSerialize;
-use crate::web::DirectionalData::{Incoming, Outgoing};
-use crate::web::WEB_DATA;
-
 pub enum RMCResponseResult {
     Success {
         call_id: u32,

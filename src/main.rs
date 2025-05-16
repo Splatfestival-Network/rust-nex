@@ -312,6 +312,8 @@ async fn start_secure() -> JoinHandle<()> {
             rv_cid_counter: AtomicU32::new(1),
         });
 
+        let web_server = web::start_web(mmm.clone()).await;
+
         let (router_secure, _) =
             Router::new(SocketAddrV4::new(*OWN_IP_PRIVATE, *SECURE_SERVER_PORT))
                 .await
@@ -383,7 +385,7 @@ async fn start_servers() {
     let auth_server = start_auth().await;
     #[cfg(feature = "secure")]
     let secure_server = start_secure().await;
-    //let web_server = web::start_web().await;
+
 
     tokio::time::sleep(Duration::from_secs(1)).await;
 
@@ -395,5 +397,4 @@ async fn start_servers() {
     auth_server.await.expect("auth server crashed");
     #[cfg(feature = "secure")]
     secure_server.await.expect("auth server crashed");
-    //web_server.await.expect("webserver crashed");
 }
