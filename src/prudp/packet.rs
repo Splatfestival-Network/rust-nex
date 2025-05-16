@@ -44,26 +44,27 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub struct TypesFlags(u16);
 
 impl TypesFlags {
+    #[inline]
     pub const fn get_types(self) -> u8 {
         (self.0 & 0x000F) as u8
     }
-
+    #[inline]
     pub const fn get_flags(self) -> u16 {
         (self.0 & 0xFFF0) >> 4
     }
-
+    #[inline]
     pub const fn types(self, val: u8) -> Self {
         Self((self.0 & 0xFFF0) | (val as u16 & 0x000F))
     }
-
+    #[inline]
     pub const fn flags(self, val: u16) -> Self {
         Self((self.0 & 0x000F) | ((val << 4) & 0xFFF0))
     }
-
+    #[inline]
     pub const fn set_flag(&mut self, val: u16){
         self.0 |= (val & 0xFFF) << 4;
     }
-
+    #[inline]
     pub const fn set_types(&mut self, val: u8){
         self.0 |= val as u16 & 0x0F;
     }

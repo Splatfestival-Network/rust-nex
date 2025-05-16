@@ -64,7 +64,7 @@ impl Router {
             
 
             tokio::spawn(async move {
-                endpoint.recieve_packet(connection, packet).await
+                endpoint.receive_packet(connection, packet).await
             });
         }
     }

@@ -408,6 +408,10 @@ impl Matchmake for User {
 
 
         println!("{:?}", urls);
+        
+        if urls.is_empty(){
+            return Err(ErrorCode::RendezVous_NotParticipatedGathering)
+        }
 
         Ok(urls)
     }

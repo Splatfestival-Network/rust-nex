@@ -274,6 +274,8 @@ async fn handle_incoming<T: RmcCallable + Send + Sync + 'static>(
             
         }
     }
+    
+    info!("rmc disconnected")
 }
 
 pub fn new_rmc_gateway_connection<T: RmcCallable + Sync + Send + 'static,F>(conn: ExternalConnection, create_internal: F) -> Arc<T>
