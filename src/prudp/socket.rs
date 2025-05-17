@@ -301,7 +301,7 @@ impl<T: CryptoHandler> InternalSocket<T> {
         for options in &packet.options {
             match options {
                 SupportedFunctions(functions) => {
-                    response.options.push(SupportedFunctions(*functions & 0x04))
+                    response.options.push(SupportedFunctions(*functions & 0xFF))
                 }
                 MaximumSubstreamId(max_substream) => {
                     response.options.push(MaximumSubstreamId(*max_substream))
@@ -462,7 +462,7 @@ impl<T: CryptoHandler> InternalSocket<T> {
                 MaximumSubstreamId(max_substream) => {
                     response.options.push(MaximumSubstreamId(*max_substream))
                 }
-                SupportedFunctions(funcs) => response.options.push(SupportedFunctions(*funcs)),
+                SupportedFunctions(funcs) => response.options.push(SupportedFunctions(*funcs & 0xFF)),
                 _ => { /* ? */ }
             }
         }

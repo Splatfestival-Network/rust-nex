@@ -278,7 +278,9 @@ async fn start_auth() -> JoinHandle<()> {
             .expect("unable to start router");
 
         let mut socket_secure = router_secure
-            .add_socket(VirtualPort::new(1, 10), Unsecure("6f599f81"))
+            .add_socket(VirtualPort::new(1, 10), Unsecure(
+                "6f599f81"
+            ))
             .await
             .expect("unable to add socket");
 
@@ -322,8 +324,10 @@ async fn start_secure() -> JoinHandle<()> {
         let mut socket_secure = router_secure
             .add_socket(
                 VirtualPort::new(1, 10),
-                Secure("6f599f81", &SECURE_SERVER_ACCOUNT),
-                //Unsecure("6f599f81"),
+                Secure(
+                    "6f599f81",
+                    &SECURE_SERVER_ACCOUNT
+                ),
             )
             .await
             .expect("unable to add socket");
