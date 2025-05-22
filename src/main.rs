@@ -9,6 +9,8 @@
 
 use crate::nex::account::Account;
 use crate::nex::auth_handler::{AuthHandler, RemoteAuthClientProtocol};
+use crate::nex::remote_console::RemoteConsole;
+use crate::nex::user::{RemoteUserProtocol, User};
 use crate::prudp::packet::VirtualPort;
 use crate::prudp::router::Router;
 use crate::prudp::secure::Secure;
@@ -18,10 +20,12 @@ use crate::rmc::protocols::auth::Auth;
 use crate::rmc::protocols::auth::RawAuth;
 use crate::rmc::protocols::auth::RawAuthInfo;
 use crate::rmc::protocols::auth::RemoteAuth;
-use crate::rmc::protocols::{new_rmc_gateway_connection, OnlyRemote};
+use crate::rmc::protocols::matchmake_extension::RemoteMatchmakeExtension;
+use crate::rmc::protocols::{new_rmc_gateway_connection, OnlyRemote, RemoteInstantiatable};
 use crate::rmc::response::ErrorCode;
 use crate::rmc::structures::any::Any;
 use crate::rmc::structures::connection_data::ConnectionData;
+use crate::rmc::structures::matchmake::{CreateMatchmakeSessionParam, Gathering, MatchmakeParam, MatchmakeSession};
 use crate::rmc::structures::qresult::QResult;
 use chrono::{Local, SecondsFormat};
 use log::{error, info};
@@ -35,10 +39,14 @@ use std::marker::PhantomData;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::ops::{BitAnd, BitOr};
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 use std::{env, fs};
+use std::sync::atomic::AtomicU32;
 use tokio::task::JoinHandle;
-use crate::nex::user::User;
+use crate::kerberos::KerberosDateTime;
+use crate::nex::matchmake::MatchmakeManager;
+use crate::rmc::protocols::secure::RemoteSecure;
 
 mod endianness;
 mod prudp;
@@ -270,7 +278,9 @@ async fn start_auth() -> JoinHandle<()> {
             .expect("unable to start router");
 
         let mut socket_secure = router_secure
-            .add_socket(VirtualPort::new(1, 10), Unsecure("6f599f81"))
+            .add_socket(VirtualPort::new(1, 10), Unsecure(
+                "6f599f81"
+            ))
             .await
             .expect("unable to add socket");
 
@@ -284,10 +294,12 @@ async fn start_auth() -> JoinHandle<()> {
 
             info!("new connected user!");
 
-            let _ = new_rmc_gateway_connection(conn, |_| AuthHandler {
-                destination_server_acct: &SECURE_SERVER_ACCOUNT,
-                build_name: "branch:origin/project/wup-agmj build:3_8_15_2004_0",
-                station_url: &SECURE_STATION_URL,
+            let _ = new_rmc_gateway_connection(conn, |_| {
+                Arc::new(AuthHandler {
+                    destination_server_acct: &SECURE_SERVER_ACCOUNT,
+                    build_name: "branch:origin/project/wup-agmj build:3_8_15_2004_0",
+                    station_url: &SECURE_STATION_URL,
+                })
             });
         }
     })
@@ -295,6 +307,15 @@ async fn start_auth() -> JoinHandle<()> {
 
 async fn start_secure() -> JoinHandle<()> {
     tokio::spawn(async {
+        let mmm = Arc::new(MatchmakeManager{
+            gid_counter: AtomicU32::new(1),
+            sessions: Default::default(),
+            users: Default::default(),
+            rv_cid_counter: AtomicU32::new(1),
+        });
+
+        let web_server = web::start_web(mmm.clone()).await;
+
         let (router_secure, _) =
             Router::new(SocketAddrV4::new(*OWN_IP_PRIVATE, *SECURE_SERVER_PORT))
                 .await
@@ -303,7 +324,10 @@ async fn start_secure() -> JoinHandle<()> {
         let mut socket_secure = router_secure
             .add_socket(
                 VirtualPort::new(1, 10),
-                Secure("6f599f81", &SECURE_SERVER_ACCOUNT),
+                Secure(
+                    "6f599f81",
+                    &SECURE_SERVER_ACCOUNT
+                ),
             )
             .await
             .expect("unable to add socket");
@@ -318,19 +342,25 @@ async fn start_secure() -> JoinHandle<()> {
 
             info!("new connected user on secure :D!");
 
-            let ip = conn.socket_addr.regular_socket_addr;
+            let ip = conn.socket_addr;
             let pid = conn.user_id;
 
-            let _ = new_rmc_gateway_connection(conn, |_| User {
-                ip,
-                pid
+            let _ = new_rmc_gateway_connection(conn, |r| {
+                Arc::new_cyclic(|w| User {
+                    ip,
+                    pid,
+                    this: w.clone(),
+                    remote: RemoteConsole::new(r),
+                    station_url: Default::default(),
+                    matchmake_manager: mmm.clone()
+                })
             });
         }
     })
 }
 
 async fn start_test() {
-    let addr = SocketAddrV4::new(*OWN_IP_PRIVATE, *AUTH_SERVER_PORT);
+    let addr = SocketAddrV4::new(*OWN_IP_PRIVATE, *SECURE_SERVER_PORT);
 
     let virt_addr = VirtualPort::new(1, 10);
     let prudp_addr = PRUDPSockAddr::new(addr, virt_addr);
@@ -346,15 +376,12 @@ async fn start_test() {
 
     let conn = socket_secure.connect(prudp_addr).await.unwrap();
 
-    let remote =
-        new_rmc_gateway_connection(conn, |r| OnlyRemote::<RemoteAuthClientProtocol>::new(r));
+    let remote = new_rmc_gateway_connection(conn, |r| {
+        Arc::new(OnlyRemote::<RemoteUserProtocol>::new(r))
+    });
 
-    let v = remote
-        .login_ex("1469690705".to_string(), Any::default())
-        .await
-        .unwrap();
-
-    println!("got it");
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    let urls = vec!["prudp:/address=192.168.178.45;port=60146;Pl=2;natf=0;natm=0;pmp=0;sid=15;upnp=0".to_owned()];
 }
 
 async fn start_servers() {
@@ -362,15 +389,16 @@ async fn start_servers() {
     let auth_server = start_auth().await;
     #[cfg(feature = "secure")]
     let secure_server = start_secure().await;
-    //let web_server = web::start_web().await;
 
-    //tokio::time::sleep(Duration::from_secs(1)).await;
+
+    tokio::time::sleep(Duration::from_secs(1)).await;
 
     //start_test().await;
+
+
 
     #[cfg(feature = "auth")]
     auth_server.await.expect("auth server crashed");
     #[cfg(feature = "secure")]
     secure_server.await.expect("auth server crashed");
-    //web_server.await.expect("webserver crashed");
 }

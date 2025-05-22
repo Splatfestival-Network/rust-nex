@@ -13,9 +13,6 @@ use crate::prudp::socket::{ExternalConnection, SendingConnection};
 use crate::rmc::response::ErrorCode::Core_Exception;
 use crate::rmc::structures::qresult::ERROR_MASK;
 use crate::rmc::structures::RmcSerialize;
-use crate::web::DirectionalData::{Incoming, Outgoing};
-use crate::web::WEB_DATA;
-
 pub enum RMCResponseResult {
     Success {
         call_id: u32,
@@ -154,8 +151,7 @@ pub async fn send_result(
     method_id: u32,
     call_id: u32,
 ) {
-   
-    println!("{}", hex::encode(result.clone().unwrap()));
+    
     let response_result = match result {
         Ok(v) => RMCResponseResult::Success {
             call_id,

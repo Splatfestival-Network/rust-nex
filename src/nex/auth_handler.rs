@@ -97,7 +97,7 @@ impl Auth for AuthHandler {
             source_login_data.0,
             ticket.into(),
             connection_data,
-            self.build_name.to_owned(),
+            self.build_name.to_string() //format!("{}; Rust NEX Version {} by DJMrTV", self.build_name, env!("CARGO_PKG_VERSION")),
         ))
     }
 

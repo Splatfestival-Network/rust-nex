@@ -6,7 +6,9 @@ use crate::rmc::structures::connection_data::ConnectionData;
 use crate::rmc::structures::qresult::QResult;
 
 #[rmc_proto(11)]
-pub trait Auth {
+pub trait Secure {
     #[method_id(1)]
-    async fn register(&self, station_urls: Vec<String>) -> Result<(QResult, u32, String), ErrorCode>;
+    async fn register(&self, station_urls: Vec<StationUrl>) -> Result<(QResult, u32, StationUrl), ErrorCode>;
+    #[method_id(7)]
+    async fn replace_url(&self, target: StationUrl, dest: StationUrl) -> Result<(), ErrorCode>;
 }
