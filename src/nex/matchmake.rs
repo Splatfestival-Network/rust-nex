@@ -288,13 +288,13 @@ impl ExtendedMatchmakeSession{
         
 
         if search_criteria.attribs.get(0).map(|str| str.parse().ok()).flatten() != self.session.attributes.get(0).map(|v| *v){
-        //    return Ok(false);
+            return Ok(false);
         }
         if search_criteria.attribs.get(2).map(|str| str.parse().ok()).flatten() != self.session.attributes.get(2).map(|v| *v){
-        //    return Ok(false);
+            return Ok(false);
         }
         if search_criteria.attribs.get(3).map(|str| str.parse().ok()).flatten() != self.session.attributes.get(3).map(|v| *v){
-        //    return Ok(false);
+            return Ok(false);
         }
 
         Ok(true)
