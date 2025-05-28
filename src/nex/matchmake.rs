@@ -3,8 +3,11 @@ use std::str::FromStr;
 use std::sync::{Arc, Weak};
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering::{Relaxed, Release};
+use std::time::Duration;
+use log::info;
 use rand::random;
 use tokio::sync::{Mutex, RwLock};
+use tokio::time::sleep;
 use crate::kerberos::KerberosDateTime;
 use crate::nex::user::User;
 use crate::rmc::protocols::notifications::{NotificationEvent, RemoteNotification};
@@ -42,6 +45,34 @@ impl MatchmakeManager{
         drop(sessions);
 
         Ok(session)
+    }
+
+    async fn garbage_collect(&self){
+        info!("running rnex garbage collector over all sessions and users");
+
+        let mut idx = 0;
+
+        // i am very well aware of how inefficient doing it like this is but this is the only
+        // way which i could think of to do this without potentially causing a deadlock of
+        // the entire server
+        while let Some((gid, sessions)) = {
+            let sessions = self.sessions.write().await;
+            let session_pair = sessions.iter().nth(idx).map(|s| (*s.0, s.1.clone()));
+            drop(sessions);
+            
+            session_pair
+        }{
+
+        }
+    }
+
+    pub async fn initialize_garbage_collect_thread(this: Weak<Self>){
+        tokio::spawn(async move {
+            while let Some(this) = this.upgrade(){
+                this.garbage_collect().await;
+                sleep(Duration::from_secs(60 * 30)).await;
+            }
+        });
     }
 }
 
@@ -254,17 +285,16 @@ impl ExtendedMatchmakeSession{
         if self.session.matchmake_system_type != mm_sys_type{
             return Ok(false);
         }
-
-        ;
+        
 
         if search_criteria.attribs.get(0).map(|str| str.parse().ok()).flatten() != self.session.attributes.get(0).map(|v| *v){
-            return Ok(false);
+        //    return Ok(false);
         }
         if search_criteria.attribs.get(2).map(|str| str.parse().ok()).flatten() != self.session.attributes.get(2).map(|v| *v){
-            return Ok(false);
+        //    return Ok(false);
         }
         if search_criteria.attribs.get(3).map(|str| str.parse().ok()).flatten() != self.session.attributes.get(3).map(|v| *v){
-            return Ok(false);
+        //    return Ok(false);
         }
 
         Ok(true)

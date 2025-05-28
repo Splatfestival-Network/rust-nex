@@ -1,54 +1,116 @@
 use std::{env, result};
 use std::array::TryFromSliceError;
 use std::net::{Ipv4Addr};
+use std::str::FromStr;
+use json::{object, JsonValue};
 use once_cell::sync::Lazy;
+use reqwest::{Body, Method, Url};
+use reqwest::header::HeaderValue;
+use rocket::serde::json::Json;
+use serde::Serialize;
 use thiserror::Error;
 use tonic::metadata::{Ascii, MetadataValue};
 use tonic::{Request, transport};
 use tonic::codegen::InterceptedService;
 use tonic::transport::Channel;
+use crate::grpc::account::Error::SomethingHappened;
 use crate::grpc::InterceptorFunc;
 use crate::grpc::protobufs::account::account_client::AccountClient;
 use crate::grpc::protobufs::account::{GetNexPasswordRequest, GetUserDataRequest, GetUserDataResponse};
 
-static API_KEY: Lazy<MetadataValue<Ascii>> = Lazy::new(||{
-    let key = env::var("ACCOUNT_GRPC_API_KEY")
+static API_KEY: Lazy<String> = Lazy::new(||{
+    let key = env::var("ACCOUNT_GQL_API_KEY")
         .expect("no public ip specified");
 
-    key.parse().expect("unable to parse metadata value")
+    key
 });
 
-static PORT: Lazy<u16> = Lazy::new(||{
-    env::var("ACCOUNT_GRPC_PORT")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(7071)
-});
-
-static IP: Lazy<Ipv4Addr> = Lazy::new(||{
-    env::var("ACCOUNT_GRPC_IP")
+static CLIENT_URI: Lazy<String> = Lazy::new(||{
+    env::var("ACCOUNT_GQL_URL")
         .ok()
         .and_then(|s| s.parse().ok())
         .expect("no public ip specified")
 });
 
-static CLIENT_URI: Lazy<String> = Lazy::new(||{
-    format!("http://{}:{}", *IP, *PORT)
-});
+
 
 #[derive(Error, Debug)]
 pub enum Error{
     #[error(transparent)]
-    Transport(#[from] transport::Error),
+    Creation(#[from] reqwest::Error),
+    #[error(transparent)]
+    Json(#[from] json::Error),
     #[error(transparent)]
     Status(#[from] tonic::Status),
     #[error("invalid password size: {0}")]
-    PasswordConversion(#[from] TryFromSliceError)
+    PasswordConversion(#[from] TryFromSliceError),
+    #[error("something happened")]
+    SomethingHappened
 }
 
 pub type Result<T> = result::Result<T, Error>;
 
+pub struct Client(reqwest::Client);
 
+impl Client{
+    pub async fn new() -> Result<Self> {
+        Ok(Self(reqwest::ClientBuilder::new().build()?))
+    }
+
+    async fn do_request(&self, request_data: JsonValue) -> Result<JsonValue>{
+        let mut request = reqwest::Request::new(Method::POST, Url::from_str(CLIENT_URI.as_str()).unwrap());
+
+        *(request.body_mut()) = Some(Body::from(request_data.to_string()));
+        request.headers_mut().insert("X-API-Key", HeaderValue::from_str(&API_KEY).unwrap());
+        request.headers_mut().insert("Content-Type", HeaderValue::from_str("application/json").unwrap());
+
+        let response = self.0.execute(request).await?;
+
+        Ok(json::parse(&response.text().await?)?)
+    }
+
+    pub async fn get_nex_password(&mut self , pid: u32) -> Result<[u8; 16]>{
+        let req = self.do_request(object!{
+            "query": r"query($pid: Int!){
+                userByPid(pid: $pid){
+                    nexPassword
+                }
+            }",
+            "variables": {
+                "pid": pid
+            }
+        }).await?;
+
+        let Some(val) = req.entries()
+            .find(|v| v.0 == "data")
+            .ok_or(SomethingHappened)?.1
+            .entries()
+            .find(|v| v.0 == "userByPid")
+            .ok_or(SomethingHappened)?.1
+            .entries()
+            .find(|v| v.0 == "nexPassword")
+            .ok_or(SomethingHappened)?.1
+            .as_str() else {
+            return Err(SomethingHappened);
+        };
+
+        Ok(val.as_bytes().try_into().map_err(|_| SomethingHappened)?)
+    }
+
+    /*pub async fn get_user_data(&mut self , pid: u32) -> Result<GetUserDataResponse>{
+        let req = Request::new(GetUserDataRequest{
+            pid
+        });
+
+        let response = self.0.get_user_data(req).await?.into_inner();
+
+        Ok(response)
+    }*/
+}
+
+
+
+/*
 
 pub struct Client(AccountClient<InterceptedService<Channel, InterceptorFunc>>);
 
@@ -85,10 +147,21 @@ impl Client{
         Ok(response)
     }
 }
-
+*/
 #[cfg(test)]
 mod test{
+    use crate::grpc::account::Client;
 
+    #[tokio::test]
+    async fn test(){
+        dotenv::dotenv().ok();
+
+        let mut client = Client::new().await.unwrap();
+
+        let cli = client.get_nex_password(1699562916).await.unwrap();
+
+        println!("{:?}", cli);
+    }
 
 
 }

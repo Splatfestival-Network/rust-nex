@@ -39,7 +39,7 @@ use std::marker::PhantomData;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::ops::{BitAnd, BitOr};
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::time::Duration;
 use std::{env, fs};
 use std::sync::atomic::AtomicU32;
@@ -313,6 +313,10 @@ async fn start_secure() -> JoinHandle<()> {
             users: Default::default(),
             rv_cid_counter: AtomicU32::new(1),
         });
+
+        let weak_mmm = Arc::downgrade(&mmm);
+
+        MatchmakeManager::initialize_garbage_collect_thread(weak_mmm).await;
 
         let web_server = web::start_web(mmm.clone()).await;
 

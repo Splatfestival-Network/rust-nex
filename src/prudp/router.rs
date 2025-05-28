@@ -21,6 +21,7 @@ static SERVER_DATAGRAMS: Lazy<u8> = Lazy::new(||{
         .unwrap_or(1)
 });
 
+
 pub struct Router {
     endpoints: RwLock<[Option<Arc<dyn AnyInternalSocket>>; 16]>,
     running: AtomicBool,
