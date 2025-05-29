@@ -52,17 +52,29 @@ impl MatchmakeManager{
 
         let mut idx = 0;
 
+        let mut to_be_deleted_gids = Vec::new();
+
         // i am very well aware of how inefficient doing it like this is but this is the only
         // way which i could think of to do this without potentially causing a deadlock of
         // the entire server
-        while let Some((gid, sessions)) = {
-            let sessions = self.sessions.write().await;
+        while let Some((gid, session)) = {
+            let sessions = self.sessions.read().await;
             let session_pair = sessions.iter().nth(idx).map(|s| (*s.0, s.1.clone()));
             drop(sessions);
             
             session_pair
         }{
+            let mut session = session.lock().await;
 
+            if !session.is_reachable(){
+                to_be_deleted_gids.push(gid);
+            }
+        }
+
+        let mut sessions = self.sessions.write().await;
+
+        for gid in to_be_deleted_gids{
+            sessions.remove(&gid);
         }
     }
 
@@ -70,6 +82,8 @@ impl MatchmakeManager{
         tokio::spawn(async move {
             while let Some(this) = this.upgrade(){
                 this.garbage_collect().await;
+
+                // every 30 minutes
                 sleep(Duration::from_secs(60 * 30)).await;
             }
         });
@@ -103,10 +117,12 @@ pub async fn broadcast_notification<T: AsRef<User>>(players: &[T], notification_
 }
 
 impl ExtendedMatchmakeSession{
+    #[inline(always)]
     pub fn get_active_players(&self) -> Vec<Arc<User>>{
         self.connected_players.iter().filter_map(|u| u.upgrade()).collect()
     }
 
+    #[inline(always)]
     pub async fn broadcast_notification(&self, notification_event: &NotificationEvent){
         broadcast_notification(&self.get_active_players(), notification_event).await;
     }
@@ -224,7 +240,7 @@ impl ExtendedMatchmakeSession{
     }
     #[inline]
     pub fn is_reachable(&self) -> bool{
-        if self.session.gathering.flags & PERSISTENT_GATHERING != 0{
+        (if self.session.gathering.flags & PERSISTENT_GATHERING != 0{
             if !self.connected_players.is_empty(){
                 true
             } else {
@@ -232,7 +248,7 @@ impl ExtendedMatchmakeSession{
             }
         } else {
             !self.connected_players.is_empty()
-        }
+        }) & !self.connected_players.is_empty()
     }
     #[inline]
     pub fn is_joinable(&self) -> bool{
