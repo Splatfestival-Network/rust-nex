@@ -39,7 +39,7 @@ use std::marker::PhantomData;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::ops::{BitAnd, BitOr};
 use std::str::FromStr;
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, Once, Weak};
 use std::time::Duration;
 use std::{env, fs};
 use std::sync::atomic::AtomicU32;
@@ -101,6 +101,8 @@ static SECURE_STATION_URL: Lazy<String> = Lazy::new(|| {
     )
 });
 
+static FORCE_EXIT: Once = Once::new();
+
 #[tokio::main]
 async fn main() {
     CombinedLogger::init(vec![
@@ -124,6 +126,12 @@ async fn main() {
         }),
     ])
     .unwrap();
+
+    ctrlc::set_handler(||{
+        FORCE_EXIT.call_once_force(|_|{
+            println!("attempting exit");
+        });
+    }).unwrap();
 
     dotenv::dotenv().ok();
 
@@ -286,7 +294,7 @@ async fn start_auth() -> JoinHandle<()> {
 
         // let conn = socket_secure.connect(auth_sockaddr).await.unwrap();
 
-        loop {
+        while !FORCE_EXIT.is_completed() {
             let Some(conn) = socket_secure.accept().await else {
                 error!("server crashed");
                 return;
@@ -338,7 +346,7 @@ async fn start_secure() -> JoinHandle<()> {
 
         // let conn = socket_secure.connect(auth_sockaddr).await.unwrap();
 
-        loop {
+        while !FORCE_EXIT.is_completed() {
             let Some(conn) = socket_secure.accept().await else {
                 error!("server crashed");
                 return;

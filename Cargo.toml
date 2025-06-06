@@ -44,6 +44,7 @@ typenum = "1.18.0"
 futures = "0.3.31"
 reqwest = "0.12.18"
 json = "0.12.4"
+ctrlc = "3.4.7"
 
 
 

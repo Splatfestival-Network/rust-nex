@@ -4,13 +4,16 @@ use std::marker::PhantomData;
 use tokio::net::UdpSocket;
 use std::net::{SocketAddr, SocketAddrV4};
 use std::net::SocketAddr::V4;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 use tokio::task::JoinHandle;
 use once_cell::sync::Lazy;
 use log::{error, info, trace};
 use thiserror::Error;
+use tokio::select;
 use tokio::sync::RwLock;
+use tokio::time::sleep;
 use crate::prudp::socket::{new_socket_pair, AnyInternalSocket, CryptoHandler, ExternalSocket};
 use crate::prudp::packet::{PRUDPPacket, VirtualPort};
 use crate::prudp::router::Error::VirtualPortTaken;
@@ -70,15 +73,23 @@ impl Router {
         }
     }
 
-    async fn server_thread_send_entry(self: Arc<Self>, socket: Arc<UdpSocket>){
+    async fn server_thread_send_entry(this: Weak<Self>, socket: Arc<UdpSocket>){
         info!("starting datagram thread");
 
-        while self.running.load(Ordering::Relaxed) {
+        while let Some(this) = this.upgrade() {
             // yes we actually allow the max udp to be read lol
             let mut msg_buffer = vec![0u8; 65507];
 
-            let (len, addr) = socket.recv_from(&mut msg_buffer)
-                .await.expect("Datagram thread crashed due to unexpected error from recv_from");
+            let (len, addr) =
+                select! {
+                    r = socket.recv_from(&mut msg_buffer) => {
+                        r.expect("Datagram thread crashed due to unexpected error from recv_from")
+                    }
+                    _ = sleep(Duration::from_secs(5)) => {
+                        continue;
+                    }
+                };
+            
 
             let V4(addr) = addr else {
                 error!("somehow got ipv6 packet...? ignoring");
@@ -88,8 +99,10 @@ impl Router {
 
             let current_msg = &msg_buffer[0..len];
 
-            tokio::spawn(self.clone().process_prudp_packets(socket.clone(), addr, current_msg.to_vec()));
+            tokio::spawn(this.process_prudp_packets(socket.clone(), addr, current_msg.to_vec()));
         }
+
+        println!("exitting datagram")
     }
     
     pub async fn new(addr: SocketAddrV4) -> io::Result<(Arc<Self>, JoinHandle<()>)>{
@@ -109,10 +122,10 @@ impl Router {
 
         let task = {
             let socket = socket.clone();
-            let server= arc.clone();
+            let server= Arc::downgrade(&arc);
 
             tokio::spawn(async {
-                server.server_thread_send_entry(socket).await;
+                Self::server_thread_send_entry(server, socket).await;
             })
         };
 
