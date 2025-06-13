@@ -94,7 +94,7 @@ static OWN_IP_PRIVATE: Lazy<Ipv4Addr> = Lazy::new(|| {
     env::var("SERVER_IP")
         .ok()
         .and_then(|s| s.parse().ok())
-        .expect("no public ip specified")
+        .expect("no private ip specified")
 });
 
 static OWN_IP_PUBLIC: Lazy<String> =

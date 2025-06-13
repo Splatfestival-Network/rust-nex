@@ -15,3 +15,4 @@ pub mod common;
 pub mod reggie;
 pub mod rnex_proxy_common;
 pub mod util;
+pub mod executables;

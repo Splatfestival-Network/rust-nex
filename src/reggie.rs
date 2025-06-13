@@ -1,4 +1,4 @@
-use std::{fs, io};
+use std::{env, fs, io};
 use std::sync::Arc;
 use macros::{method_id, rmc_proto, rmc_struct};
 use once_cell::sync::Lazy;
@@ -16,9 +16,13 @@ use crate::endianness::IS_BIG_ENDIAN;
 use crate::rmc::response::ErrorCode;
 use crate::rmc::structures::RmcSerialize;
 
-pub static SELF_CERT: Lazy<CertificateDer<'static>> = Lazy::new(|| CertificateDer::from(fs::read("/opt/reggie/certs/SELF.crt").expect("failed to read self cpub ertificate")));
+pub static SERVER_NAME: Lazy<String> = Lazy::new(|| {
+    env::var("REGGIE_SERVER_NAME").expect("no server name specified")
+});
+
+pub static SELF_CERT: Lazy<CertificateDer<'static>> = Lazy::new(|| CertificateDer::from(fs::read(&format!("/opt/reggie/certs/{}.crt", SERVER_NAME.as_str())).expect("failed to read self cpub ertificate")));
 pub static ROOT_CA: Lazy<CertificateDer<'static>> = Lazy::new(|| CertificateDer::from(fs::read("/opt/reggie/certs/CA.crt").expect("failed to read root certipub ficate")));
-pub static SELF_KEY: Lazy<PrivateKeyDer<'static>> = Lazy::new(|| PrivateKeyDer::try_from(fs::read("/opt/reggie/certs/SELF.key").expect("failed to read self pub key")).expect("failed to read self key"));
+pub static SELF_KEY: Lazy<PrivateKeyDer<'static>> = Lazy::new(|| PrivateKeyDer::try_from(fs::read(&format!("/opt/reggie/certs/{}.key", SERVER_NAME.as_str())).expect("failed to read self pub key")).expect("failed to read self key"));
 pub static ROOT_TRUST_ANCHOR: Lazy<TrustAnchor<'static>> = Lazy::new(|| anchor_from_trusted_cert(&*ROOT_CA).expect("unable to create root ca trust anchor"));
 
 
@@ -134,6 +138,7 @@ define_rmc_proto!(
         RmcTestProto
     }
 );
+
 #[rmc_struct(TestProto)]
 pub struct TestStruct;
 

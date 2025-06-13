@@ -75,5 +75,10 @@ name = "proxy_secure"
 path = "src/executables/proxy_secure.rs"
 
 [[bin]]
-name = "backend_server"
-path = "src/executables/backend_server.rs"
+name = "backend_server_insecure"
+path = "src/executables/backend_server_insecure.rs"
+
+
+[[bin]]
+name = "backend_server_secure"
+path = "src/executables/backend_server_secure.rs"

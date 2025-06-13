@@ -1,4 +1,4 @@
-mod proxy_secure;
+
 
 use std::env;
 use std::ffi::CStr;
@@ -18,6 +18,7 @@ use sha2::Sha256;
 use tokio::net::TcpSocket;
 use tokio::task;
 use rust_nex::common::setup;
+use rust_nex::executables::common::{OWN_IP_PRIVATE, SERVER_PORT};
 use rust_nex::prudp::packet::VirtualPort;
 use rust_nex::prudp::router::Router;
 use rust_nex::prudp::unsecure::Unsecure;
@@ -25,25 +26,12 @@ use rust_nex::reggie::{establish_tls_connection_to, UnitPacketRead, UnitPacketWr
 use rust_nex::rmc::structures::RmcSerialize;
 use rust_nex::rnex_proxy_common::ConnectionInitData;
 
-static OWN_IP_PRIVATE: Lazy<Ipv4Addr> = Lazy::new(|| {
-    env::var("SERVER_IP")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .expect("no public ip specified")
-});
 
-static OWN_IP_PUBLIC: Lazy<String> =
-    Lazy::new(|| env::var("SERVER_IP_PUBLIC").unwrap_or(OWN_IP_PRIVATE.to_string()));
-
-static SERVER_PORT: Lazy<u16> = Lazy::new(|| {
-    env::var("AUTH_SERVER_PORT")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(10000)
-});
 
 static FORWARD_DESTINATION: Lazy<String> =
-    Lazy::new(|| env::var("FORWARD_DESTINATION").unwrap_or(OWN_IP_PRIVATE.to_string()));
+    Lazy::new(|| env::var("FORWARD_DESTINATION").expect("no forward destination given"));
+static FORWARD_DESTINATION_NAME: Lazy<String> =
+    Lazy::new(|| env::var("FORWARD_DESTINATION_NAME").expect("no forward destination name given"));
 
 static RSA_PRIVKEY: Lazy<RsaPrivateKey> = Lazy::new(|| {
     let path = env::var("RSA_PRIVKEY")
@@ -90,10 +78,11 @@ async fn main() {
 
         task::spawn(async move {
             let mut stream
-                = establish_tls_connection_to("192.168.178.120:2376", "account.spfn.net").await;
+                = establish_tls_connection_to(FORWARD_DESTINATION.as_str(), FORWARD_DESTINATION_NAME.as_str()).await;
 
             if let Err(e) = stream.send_buffer(&ConnectionInitData{
-                prudpsock_addr: conn.socket_addr
+                prudpsock_addr: conn.socket_addr,
+                pid: conn.user_id
             }.to_data()).await{
                 error!("error connecting to backend: {}", e);
                 return;

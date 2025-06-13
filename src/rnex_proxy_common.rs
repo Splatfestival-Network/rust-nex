@@ -6,5 +6,7 @@ use crate::prudp::sockaddr::PRUDPSockAddr;
 #[rmc_struct(0)]
 pub struct ConnectionInitData{
     pub prudpsock_addr: PRUDPSockAddr,
+    pub pid: u32,
+    
 }
 
