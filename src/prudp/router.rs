@@ -15,7 +15,7 @@ use tokio::select;
 use tokio::sync::RwLock;
 use tokio::time::sleep;
 use crate::prudp::socket::{new_socket_pair, AnyInternalSocket, CryptoHandler, ExternalSocket};
-use crate::prudp::packet::{PRUDPPacket, VirtualPort};
+use crate::prudp::packet::{PRUDPV1Packet, VirtualPort};
 use crate::prudp::router::Error::VirtualPortTaken;
 
 static SERVER_DATAGRAMS: Lazy<u8> = Lazy::new(||{
@@ -31,6 +31,7 @@ pub struct Router {
     socket: Arc<UdpSocket>,
     _no_outside_construction: PhantomData<()>
 }
+
 #[derive(Debug, Error)]
 pub enum Error{
     #[error("tried to register socket to a port which is already taken (port: {0})")]
@@ -43,7 +44,7 @@ impl Router {
         let mut stream = Cursor::new(&udp_message);
 
         while stream.position() as usize != udp_message.len() {
-            let packet = match PRUDPPacket::new(&mut stream){
+            let packet = match PRUDPV1Packet::new(&mut stream){
                 Ok(p) => p,
                 Err(e) => {
                     error!("Somebody({}) is fucking with the servers or their connection is bad (reason: {})", addr, e);
@@ -155,7 +156,7 @@ impl Router {
     }
 
     // returns Some(()) i
-    pub(crate) async fn add_socket<E: CryptoHandler>(&self, virtual_port: VirtualPort, encryption: E)
+    pub async fn add_socket<E: CryptoHandler>(&self, virtual_port: VirtualPort, encryption: E)
         -> Result<ExternalSocket, Error>{
         let mut endpoints = self.endpoints.write().await;
 

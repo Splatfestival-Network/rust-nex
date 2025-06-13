@@ -45,7 +45,7 @@ async fn players_in_match(mmm: &State<Arc<MatchmakeManager>>, gid: u32) -> Optio
 
     Some(Json(gathering.connected_players.iter().filter_map(|p| p.upgrade()).map(|p| p.pid).collect()))
 }
-
+/*
 #[get("/player/<pid>/disconnect")]
 async fn disconnect_player(_auth: RnexApiAuth, mmm: &State<Arc<MatchmakeManager>>, pid: u32) -> Option<()>{
     // this doesnt work and is broken, there might be some other way to remotely close gatherings...
@@ -59,7 +59,7 @@ async fn disconnect_player(_auth: RnexApiAuth, mmm: &State<Arc<MatchmakeManager>
 
 
     Some(())
-}
+}*/
 
 #[get("/gathering/<gid>/close")]
 async fn close_gathering(_auth: RnexApiAuth, mmm: &State<Arc<MatchmakeManager>>, gid: u32) -> Option<()>{
@@ -89,7 +89,7 @@ async fn close_gathering(_auth: RnexApiAuth, mmm: &State<Arc<MatchmakeManager>>,
 pub async fn start_web(mgr: Arc<MatchmakeManager>) -> JoinHandle<()> {
     tokio::spawn(async move {
         rocket::build()
-            .mount("/", routes![gatherings, players_in_match, close_gathering, disconnect_player])
+            .mount("/", routes![gatherings, players_in_match, close_gathering])
             .manage(mgr)
             .launch().await
             .expect("unable to start webserver");

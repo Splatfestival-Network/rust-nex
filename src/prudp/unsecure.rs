@@ -1,7 +1,7 @@
 use once_cell::sync::Lazy;
 use rc4::{Key, KeyInit, Rc4, StreamCipher};
 use typenum::U5;
-use crate::prudp::packet::PRUDPPacket;
+use crate::prudp::packet::PRUDPV1Packet;
 use crate::prudp::socket::{CryptoHandler, CryptoHandlerConnectionInstance, EncryptionPair};
 
 pub struct Unsecure(pub &'static str);
@@ -43,7 +43,7 @@ impl CryptoHandler for Unsecure {
         ))
     }
 
-    fn sign_pre_handshake(&self, packet: &mut PRUDPPacket) {
+    fn sign_pre_handshake(&self, packet: &mut PRUDPV1Packet) {
         packet.set_sizes();
         packet.calculate_and_assign_signature(self.0, None, None);
     }
@@ -68,17 +68,17 @@ impl CryptoHandlerConnectionInstance for UnsecureInstance {
         0
     }
 
-    fn sign_connect(&self, packet: &mut PRUDPPacket) {
+    fn sign_connect(&self, packet: &mut PRUDPV1Packet) {
         packet.set_sizes();
         packet.calculate_and_assign_signature(self.key, None, Some(self.self_signature));
     }
 
-    fn sign_packet(&self, packet: &mut PRUDPPacket) {
+    fn sign_packet(&self, packet: &mut PRUDPV1Packet) {
         packet.set_sizes();
         packet.calculate_and_assign_signature(self.key, None, Some(self.self_signature));
     }
 
-    fn verify_packet(&self, packet: &PRUDPPacket) -> bool {
+    fn verify_packet(&self, packet: &PRUDPV1Packet) -> bool {
         true
     }
 }

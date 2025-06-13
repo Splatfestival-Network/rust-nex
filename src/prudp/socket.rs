@@ -4,7 +4,7 @@ use crate::prudp::packet::types::{CONNECT, DATA, DISCONNECT, PING, SYN};
 use crate::prudp::packet::PacketOption::{
     ConnectionSignature, FragmentId, InitialSequenceId, MaximumSubstreamId, SupportedFunctions,
 };
-use crate::prudp::packet::{PRUDPHeader, PRUDPPacket, PacketOption, TypesFlags, VirtualPort};
+use crate::prudp::packet::{PRUDPV1Header, PRUDPV1Packet, PacketOption, TypesFlags, VirtualPort};
 use crate::prudp::router::{Error, Router};
 use crate::prudp::sockaddr::PRUDPSockAddr;
 use async_trait::async_trait;
@@ -67,7 +67,7 @@ struct InternalConnection<E: CryptoHandlerConnectionInstance> {
     crypto_handler_instance: E,
     data_sender: Sender<Vec<u8>>,
     socket: Arc<UdpSocket>,
-    packet_queue: HashMap<u16, PRUDPPacket>,
+    packet_queue: HashMap<u16, PRUDPV1Packet>,
     last_packet_time: Instant,
 }
 
@@ -88,7 +88,7 @@ impl<E: CryptoHandlerConnectionInstance> InternalConnection<E> {
     }
 
     #[inline]
-    async fn send_raw_packet(&self, mut prudp_packet: PRUDPPacket) {
+    async fn send_raw_packet(&self, mut prudp_packet: PRUDPV1Packet) {
         prudp_packet.set_sizes();
 
         let mut vec = Vec::new();
@@ -128,7 +128,7 @@ pub(super) struct InternalSocket<T: CryptoHandler> {
     internal_connections: Arc<
         Mutex<BTreeMap<PRUDPSockAddr, Arc<Mutex<InternalConnection<T::CryptoConnectionInstance>>>>>,
     >,
-    connection_establishment_data_sender: Mutex<Option<Sender<PRUDPPacket>>>,
+    connection_establishment_data_sender: Mutex<Option<Sender<PRUDPV1Packet>>>,
     connection_sender: Sender<ExternalConnection>,
 }
 
@@ -170,7 +170,7 @@ impl<T: CryptoHandler> Deref for InternalSocket<T> {
 pub(super) trait AnyInternalSocket:
     Send + Sync + Deref<Target = CommonSocket> + 'static
 {
-    async fn receive_packet(&self, address: PRUDPSockAddr, packet: PRUDPPacket);
+    async fn receive_packet(&self, address: PRUDPSockAddr, packet: PRUDPV1Packet);
     async fn connect(&self, address: PRUDPSockAddr) -> Option<()>;
 }
 
@@ -186,8 +186,8 @@ pub(super) trait AnyInternalConnection:
 #[async_trait]
 impl<T: CryptoHandlerConnectionInstance> AnyInternalConnection for InternalConnection<T> {
     async fn send_data_packet(&mut self, data: Vec<u8>) {
-        let mut packet = PRUDPPacket {
-            header: PRUDPHeader {
+        let mut packet = PRUDPV1Packet {
+            header: PRUDPV1Header {
                 sequence_id: self.next_server_count(),
                 substream_id: 0,
                 session_id: self.session_id,
@@ -214,8 +214,8 @@ impl<T: CryptoHandlerConnectionInstance> AnyInternalConnection for InternalConne
     async fn close_connection(&mut self) {
         // jon confirmed that this should be a safe way to dc a client
 
-        let mut packet = PRUDPPacket {
-            header: PRUDPHeader {
+        let mut packet = PRUDPV1Packet {
+            header: PRUDPV1Header {
                 sequence_id: self.next_server_count(),
                 substream_id: 0,
                 session_id: self.session_id,
@@ -269,7 +269,7 @@ impl<T: CryptoHandler> InternalSocket<T> {
         Some(conn)
     }
 
-    async fn send_packet_unbuffered(&self, dest: PRUDPSockAddr, mut packet: PRUDPPacket) {
+    async fn send_packet_unbuffered(&self, dest: PRUDPSockAddr, mut packet: PRUDPV1Packet) {
         packet.set_sizes();
 
         let mut vec = Vec::new();
@@ -284,7 +284,7 @@ impl<T: CryptoHandler> InternalSocket<T> {
             .expect("failed to send data back");
     }
 
-    async fn handle_syn(&self, address: PRUDPSockAddr, packet: PRUDPPacket) {
+    async fn handle_syn(&self, address: PRUDPSockAddr, packet: PRUDPV1Packet) {
         info!("got syn");
 
         let mut response = packet.base_response_packet();
@@ -328,8 +328,8 @@ impl<T: CryptoHandler> InternalSocket<T> {
             let mut conn = conn.lock().await;
 
             if conn.last_packet_time < (Instant::now() - Duration::from_secs(5)) {
-                conn.send_raw_packet(PRUDPPacket {
-                    header: PRUDPHeader {
+                conn.send_raw_packet(PRUDPV1Packet {
+                    header: PRUDPV1Header {
                         sequence_id: 0,
                         substream_id: 0,
                         session_id: 0,
@@ -408,7 +408,7 @@ impl<T: CryptoHandler> InternalSocket<T> {
             .expect("connection to external socket lost");
     }
 
-    async fn handle_connect(&self, address: PRUDPSockAddr, packet: PRUDPPacket) {
+    async fn handle_connect(&self, address: PRUDPSockAddr, packet: PRUDPV1Packet) {
         info!("got connect");
         let Some(MaximumSubstreamId(max_substream)) = packet
             .options
@@ -479,7 +479,7 @@ impl<T: CryptoHandler> InternalSocket<T> {
         self.send_packet_unbuffered(address, response).await;
     }
 
-    async fn handle_data(&self, address: PRUDPSockAddr, mut packet: PRUDPPacket) {
+    async fn handle_data(&self, address: PRUDPSockAddr, mut packet: PRUDPV1Packet) {
         info!("got data");
 
         if packet.header.types_and_flags.get_flags() & (NEED_ACK | RELIABLE)
@@ -524,7 +524,7 @@ impl<T: CryptoHandler> InternalSocket<T> {
         }
     }
 
-    async fn handle_ping(&self, address: PRUDPSockAddr, packet: PRUDPPacket) {
+    async fn handle_ping(&self, address: PRUDPSockAddr, packet: PRUDPV1Packet) {
         let connections = self.internal_connections.lock().await;
         let Some(conn) = connections.get(&address) else {
             error!("tried to send data on inactive connection!");
@@ -544,7 +544,7 @@ impl<T: CryptoHandler> InternalSocket<T> {
         self.send_packet_unbuffered(address, response).await;
     }
 
-    async fn handle_disconnect(&self, address: PRUDPSockAddr, packet: PRUDPPacket) {
+    async fn handle_disconnect(&self, address: PRUDPSockAddr, packet: PRUDPV1Packet) {
         let connections = self.internal_connections.lock().await;
         let Some(conn) = connections.get(&address) else {
             error!("tried to send data on inactive connection!");
@@ -571,7 +571,7 @@ impl<T: CryptoHandler> InternalSocket<T> {
 
 #[async_trait]
 impl<T: CryptoHandler> AnyInternalSocket for InternalSocket<T> {
-    async fn receive_packet(&self, address: PRUDPSockAddr, packet: PRUDPPacket) {
+    async fn receive_packet(&self, address: PRUDPSockAddr, packet: PRUDPV1Packet) {
         // todo: handle acks and resending
 
         if let Some(conn) = self.get_connection(address).await {
@@ -643,8 +643,8 @@ impl<T: CryptoHandler> AnyInternalSocket for InternalSocket<T> {
 
         let remote_signature = address.calculate_connection_signature();
 
-        let packet = PRUDPPacket {
-            header: PRUDPHeader {
+        let packet = PRUDPV1Packet {
+            header: PRUDPV1Header {
                 source_port: self.virtual_port,
                 destination_port: address.virtual_port,
                 types_and_flags: TypesFlags::default().types(SYN).flags(NEED_ACK),
@@ -674,8 +674,8 @@ impl<T: CryptoHandler> AnyInternalSocket for InternalSocket<T> {
             return None;
         };
 
-        let packet = PRUDPPacket {
-            header: PRUDPHeader {
+        let packet = PRUDPV1Packet {
+            header: PRUDPV1Header {
                 source_port: self.virtual_port,
                 destination_port: address.virtual_port,
                 types_and_flags: TypesFlags::default().types(CONNECT).flags(NEED_ACK),
@@ -746,9 +746,9 @@ pub trait CryptoHandlerConnectionInstance: Send + Sync + 'static {
     fn encrypt_outgoing(&mut self, substream: u8, data: &mut [u8]);
 
     fn get_user_id(&self) -> u32;
-    fn sign_connect(&self, packet: &mut PRUDPPacket);
-    fn sign_packet(&self, packet: &mut PRUDPPacket);
-    fn verify_packet(&self, packet: &PRUDPPacket) -> bool;
+    fn sign_connect(&self, packet: &mut PRUDPV1Packet);
+    fn sign_packet(&self, packet: &mut PRUDPV1Packet);
+    fn verify_packet(&self, packet: &PRUDPV1Packet) -> bool;
 }
 
 pub trait CryptoHandler: Send + Sync + 'static {
@@ -762,7 +762,7 @@ pub trait CryptoHandler: Send + Sync + 'static {
         substream_count: u8,
     ) -> Option<(Vec<u8>, Self::CryptoConnectionInstance)>;
 
-    fn sign_pre_handshake(&self, packet: &mut PRUDPPacket);
+    fn sign_pre_handshake(&self, packet: &mut PRUDPV1Packet);
 }
 
 impl Deref for ExternalConnection {
@@ -813,6 +813,12 @@ impl SendingConnection {
 
 impl<E: CryptoHandlerConnectionInstance> Drop for InternalConnection<E> {
     fn drop(&mut self) {
-        println!("yatta");
+        println!("yatta(internal conn)");
+    }
+}
+
+impl Drop for CommonConnection {
+    fn drop(&mut self) {
+        println!("yatta(common conn)");
     }
 }

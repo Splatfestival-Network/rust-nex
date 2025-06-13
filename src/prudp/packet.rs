@@ -144,7 +144,7 @@ impl Debug for VirtualPort {
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Pod, Zeroable, SwapEndian, Eq, PartialEq)]
-pub struct PRUDPHeader {
+pub struct PRUDPV1Header {
     pub magic: [u8; 2],
     pub version: u8,
     pub packet_specific_size: u8,
@@ -157,7 +157,7 @@ pub struct PRUDPHeader {
     pub sequence_id: u16,
 }
 
-impl Default for PRUDPHeader{
+impl Default for PRUDPV1Header {
     fn default() -> Self {
         Self{
             magic: [0xEA, 0xD0],
@@ -239,8 +239,8 @@ impl PacketOption{
 }
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
-pub struct PRUDPPacket {
-    pub header: PRUDPHeader,
+pub struct PRUDPV1Packet {
+    pub header: PRUDPV1Header,
     pub packet_signature: [u8; 16],
     pub payload: Vec<u8>,
     pub options: Vec<PacketOption>,
@@ -277,9 +277,9 @@ impl Into<u8> for OptionId {
     }
 }
 
-impl PRUDPPacket {
+impl PRUDPV1Packet {
     pub fn new(reader: &mut (impl Read + Seek)) -> Result<Self> {
-        let header: PRUDPHeader = reader.read_struct(IS_BIG_ENDIAN)?;
+        let header: PRUDPV1Header = reader.read_struct(IS_BIG_ENDIAN)?;
 
         if header.magic[0] != 0xEA ||
             header.magic[1] != 0xD0 {
@@ -372,7 +372,7 @@ impl PRUDPPacket {
 
 
         Self{
-            header: PRUDPHeader{
+            header: PRUDPV1Header {
                 types_and_flags: flags,
                 sequence_id: self.header.sequence_id,
                 substream_id: self.header.substream_id,
@@ -444,7 +444,7 @@ impl PRUDPPacket {
 
     pub fn  base_response_packet(&self) -> Self {
         Self {
-            header: PRUDPHeader {
+            header: PRUDPV1Header {
                 magic: [0xEA, 0xD0],
                 types_and_flags: TypesFlags(0),
                 destination_port: self.header.source_port,
@@ -481,10 +481,10 @@ impl PRUDPPacket {
 mod test {
     use crate::prudp::packet::flags::{NEED_ACK, RELIABLE};
     use crate::prudp::packet::types::DATA;
-    use super::{OptionId, PacketOption, PRUDPHeader, TypesFlags, VirtualPort};
+    use super::{OptionId, PacketOption, PRUDPV1Header, TypesFlags, VirtualPort};
     #[test]
     fn size_test() {
-        assert_eq!(size_of::<PRUDPHeader>(), 14);
+        assert_eq!(size_of::<PRUDPV1Header>(), 14);
     }
 
     #[test]
@@ -511,7 +511,7 @@ mod test {
 
     #[test]
     fn header_read(){
-        let header = PRUDPHeader{
+        let header = PRUDPV1Header {
             version: 0,
             destination_port: VirtualPort(0),
             substream_id: 0,

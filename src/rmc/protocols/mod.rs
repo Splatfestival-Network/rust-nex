@@ -9,6 +9,7 @@ pub mod nat_traversal;
 pub mod matchmake_ext;
 pub mod ranking;
 
+use crate::util::{SendingBufferConnection, SplittableBufferConnection};
 use crate::prudp::socket::{ExternalConnection, SendingConnection};
 use crate::rmc::message::RMCMessage;
 use crate::rmc::protocols::RemoteCallError::ConnectionBroke;
@@ -45,7 +46,7 @@ pub enum RemoteCallError {
     InvalidResponse(#[from] structures::Error),
 }
 
-pub struct RmcConnection(pub SendingConnection, pub RmcResponseReceiver);
+pub struct RmcConnection(pub SendingBufferConnection, pub RmcResponseReceiver);
 
 pub struct RmcResponseReceiver(Arc<Notify>, Arc<Mutex<HashMap<u32, RMCResponse>>>);
 
@@ -141,7 +142,7 @@ pub trait RmcCallable {
     //type Remote: RemoteObject;
     fn rmc_call(
         &self,
-        responder: &SendingConnection,
+        responder: &SendingBufferConnection,
         protocol_id: u16,
         method_id: u32,
         call_id: u32,
@@ -156,7 +157,7 @@ macro_rules! define_rmc_proto {
     }) => {
         paste::paste!{
             pub trait [<Local $name>]: std::any::Any $( + [<Raw $protocol>] + $protocol)* {
-                async fn rmc_call(&self, remote_response_connection: &crate::prudp::socket::SendingConnection, protocol_id: u16, method_id: u32, call_id: u32, rest: Vec<u8>){
+                async fn rmc_call(&self, remote_response_connection: &splatoon_server_rust::util::SendingBufferConnection, protocol_id: u16, method_id: u32, call_id: u32, rest: Vec<u8>){
                     match protocol_id{
                         $(
                             [<Raw $protocol Info>]::PROTOCOL_ID => <Self as [<Raw $protocol>]>::rmc_call_proto(self, remote_response_connection, method_id, call_id, rest).await,
@@ -166,16 +167,16 @@ macro_rules! define_rmc_proto {
                 }
             }
 
-            pub struct [<Remote $name>](crate::rmc::protocols::RmcConnection);
+            pub struct [<Remote $name>](splatoon_server_rust::rmc::protocols::RmcConnection);
 
-            impl crate::rmc::protocols::RemoteInstantiatable for [<Remote $name>]{
-                fn new(conn: crate::rmc::protocols::RmcConnection) -> Self{
+            impl splatoon_server_rust::rmc::protocols::RemoteInstantiatable for [<Remote $name>]{
+                fn new(conn: splatoon_server_rust::rmc::protocols::RmcConnection) -> Self{
                     Self(conn)
                 }
             }
 
-            impl crate::rmc::protocols::HasRmcConnection for [<Remote $name>]{
-                fn get_connection(&self) -> &crate::rmc::protocols::RmcConnection{
+            impl splatoon_server_rust::rmc::protocols::HasRmcConnection for [<Remote $name>]{
+                fn get_connection(&self) -> &splatoon_server_rust::rmc::protocols::RmcConnection{
                     &self.0
                 }
             }
@@ -191,7 +192,7 @@ macro_rules! define_rmc_proto {
 impl RmcCallable for () {
     async fn rmc_call(
         &self,
-        remote_response_connection: &crate::prudp::socket::SendingConnection,
+        remote_response_connection: &SendingBufferConnection,
         protocol_id: u16,
         method_id: u32,
         call_id: u32,
@@ -222,13 +223,13 @@ impl<T: RemoteInstantiatable> OnlyRemote<T>{
 }
 
 impl<T: RemoteInstantiatable> RmcCallable for OnlyRemote<T>{
-    fn rmc_call(&self, responder: &SendingConnection, protocol_id: u16, method_id: u32, call_id: u32, rest: Vec<u8>) -> impl std::future::Future<Output = ()> + Send {
+    fn rmc_call(&self, responder: &SendingBufferConnection, protocol_id: u16, method_id: u32, call_id: u32, rest: Vec<u8>) -> impl std::future::Future<Output = ()> + Send {
         async{}
     }
 }
 
 async fn handle_incoming<T: RmcCallable + Send + Sync + 'static>(
-    mut connection: ExternalConnection,
+    mut connection: SplittableBufferConnection,
     remote: Arc<T>,
     notify: Arc<Notify>,
     incoming: Arc<Mutex<HashMap<u32, RMCResponse>>>,
@@ -278,7 +279,7 @@ async fn handle_incoming<T: RmcCallable + Send + Sync + 'static>(
     info!("rmc disconnected")
 }
 
-pub fn new_rmc_gateway_connection<T: RmcCallable + Sync + Send + 'static,F>(conn: ExternalConnection, create_internal: F) -> Arc<T>
+pub fn new_rmc_gateway_connection<T: RmcCallable + Sync + Send + 'static,F>(conn: SplittableBufferConnection, create_internal: F) -> Arc<T>
 where
     F: FnOnce(RmcConnection) -> Arc<T>,
 {
