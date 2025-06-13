@@ -189,7 +189,7 @@ pub fn rmc_serialize(input: TokenStream) -> TokenStream {
 
         quote! {
             #pre_inner
-            crate::rmc::structures::rmc_struct::write_struct(writer, #version, |mut writer|{
+            rust_nex::rmc::structures::rmc_struct::write_struct(writer, #version, |mut writer|{
                 #serialize_base_content
             })?;
 
@@ -218,7 +218,7 @@ pub fn rmc_serialize(input: TokenStream) -> TokenStream {
 
         quote! {
             #pre_inner
-            Ok(crate::rmc::structures::rmc_struct::read_struct(reader, #version, move |mut reader|{
+            Ok(rust_nex::rmc::structures::rmc_struct::read_struct(reader, #version, move |mut reader|{
                 #deserialize_base_content
             })?)
         }
@@ -229,14 +229,14 @@ pub fn rmc_serialize(input: TokenStream) -> TokenStream {
     let ident = derive_input.ident;
 
     let tokens = quote! {
-        impl crate::rmc::structures::RmcSerialize for #ident{
-            fn serialize(&self, writer: &mut dyn ::std::io::Write) -> crate::rmc::structures::Result<()>{
+        impl rust_nex::rmc::structures::RmcSerialize for #ident{
+            fn serialize(&self, writer: &mut dyn ::std::io::Write) -> rust_nex::rmc::structures::Result<()>{
                 #serialize_base_content
 
 
             }
 
-            fn deserialize(reader: &mut dyn ::std::io::Read) -> crate::rmc::structures::Result<Self>{
+            fn deserialize(reader: &mut dyn ::std::io::Read) -> rust_nex::rmc::structures::Result<Self>{
                 #deserialize_base_content
             }
         }
@@ -367,8 +367,8 @@ pub fn rmc_struct(attr: TokenStream, input: TokenStream) -> TokenStream{
 
         }
 
-        impl crate::rmc::protocols::RmcCallable for #struct_name{
-            async fn rmc_call(&self, remote_response_connection: &crate::prudp::socket::SendingConnection, protocol_id: u16, method_id: u32, call_id: u32, rest: Vec<u8>){
+        impl rust_nex::rmc::protocols::RmcCallable for #struct_name{
+            async fn rmc_call(&self, remote_response_connection: &rust_nex::util::SendingBufferConnection, protocol_id: u16, method_id: u32, call_id: u32, rest: Vec<u8>){
                 <Self as #ident>::rmc_call(self, remote_response_connection, protocol_id, method_id, call_id, rest).await;
             }
         }

@@ -8,7 +8,7 @@ use typenum::U5;
 use crate::endianness::{IS_BIG_ENDIAN, ReadExtensions};
 use crate::kerberos::{derive_key, TicketInternalData};
 use crate::nex::account::Account;
-use crate::prudp::packet::PRUDPPacket;
+use crate::prudp::packet::PRUDPV1Packet;
 use crate::prudp::socket::{CryptoHandler, CryptoHandlerConnectionInstance, EncryptionPair};
 use crate::prudp::unsecure::UnsecureInstance;
 use crate::rmc::structures::RmcSerialize;
@@ -150,7 +150,7 @@ impl CryptoHandler for Secure {
         ))
     }
 
-    fn sign_pre_handshake(&self, packet: &mut PRUDPPacket) {
+    fn sign_pre_handshake(&self, packet: &mut PRUDPV1Packet) {
         packet.set_sizes();
         packet.calculate_and_assign_signature(self.0, None, None);
     }
@@ -176,17 +176,17 @@ impl CryptoHandlerConnectionInstance for SecureInstance {
         self.pid
     }
 
-    fn sign_connect(&self, packet: &mut PRUDPPacket) {
+    fn sign_connect(&self, packet: &mut PRUDPV1Packet) {
         packet.set_sizes();
         packet.calculate_and_assign_signature(self.access_key, None, Some(self.self_signature));
     }
 
-    fn sign_packet(&self, packet: &mut PRUDPPacket) {
+    fn sign_packet(&self, packet: &mut PRUDPV1Packet) {
         packet.set_sizes();
         packet.calculate_and_assign_signature(self.access_key, Some(self.session_key), Some(self.self_signature));
     }
 
-    fn verify_packet(&self, packet: &PRUDPPacket) -> bool {
+    fn verify_packet(&self, packet: &PRUDPV1Packet) -> bool {
         true
     }
 }

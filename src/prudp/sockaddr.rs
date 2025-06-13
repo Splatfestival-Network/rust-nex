@@ -1,11 +1,13 @@
 use std::io::Write;
 use std::net::SocketAddrV4;
 use hmac::{Hmac, Mac};
+use macros::RmcSerialize;
 use crate::prudp::packet::VirtualPort;
 
 type Md5Hmac = Hmac<md5::Md5>;
 
-#[derive(Eq, PartialEq, Hash, Debug, Copy, Clone, Ord, PartialOrd)]
+#[derive(Eq, PartialEq, Hash, Debug, Copy, Clone, Ord, PartialOrd, RmcSerialize)]
+#[rmc_struct(0)]
 pub struct PRUDPSockAddr{
     pub regular_socket_addr: SocketAddrV4,
     pub virtual_port: VirtualPort

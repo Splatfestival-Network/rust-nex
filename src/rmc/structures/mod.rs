@@ -33,10 +33,19 @@ pub mod primitives;
 pub mod matchmake;
 pub mod variant;
 pub mod ranking;
+mod networking;
 
 pub trait RmcSerialize: Sized{
     fn serialize(&self, writer: &mut dyn Write) -> Result<()>;
     fn deserialize(reader: &mut dyn Read) -> Result<Self>;
+
+    fn to_data(&self) -> Vec<u8>{
+        let mut data = Vec::new();
+
+        self.serialize(&mut data).expect("out of memory or something");
+
+        data
+    }
 }
 
 impl RmcSerialize for (){
@@ -46,4 +55,6 @@ impl RmcSerialize for (){
     fn deserialize(reader: &mut dyn Read) -> Result<Self> {
         Ok(())
     }
+
+    
 }

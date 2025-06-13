@@ -20,7 +20,7 @@ use crate::grpc::protobufs::account::{GetNexPasswordRequest, GetUserDataRequest,
 
 static API_KEY: Lazy<String> = Lazy::new(||{
     let key = env::var("ACCOUNT_GQL_API_KEY")
-        .expect("no public ip specified");
+        .expect("no graphql ip specified");
 
     key
 });
@@ -29,7 +29,7 @@ static CLIENT_URI: Lazy<String> = Lazy::new(||{
     env::var("ACCOUNT_GQL_URL")
         .ok()
         .and_then(|s| s.parse().ok())
-        .expect("no public ip specified")
+        .expect("no graphql ip specified")
 });
 
 

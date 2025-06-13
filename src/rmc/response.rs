@@ -5,7 +5,7 @@ use bytemuck::bytes_of;
 use log::error;
 use v_byte_macros::EnumTryInto;
 use crate::endianness::{ReadExtensions, IS_BIG_ENDIAN};
-use crate::prudp::packet::{PRUDPPacket};
+use crate::prudp::packet::{PRUDPV1Packet};
 use crate::prudp::packet::flags::{NEED_ACK, RELIABLE};
 use crate::prudp::packet::PacketOption::FragmentId;
 use crate::prudp::packet::types::DATA;
@@ -13,6 +13,8 @@ use crate::prudp::socket::{ExternalConnection, SendingConnection};
 use crate::rmc::response::ErrorCode::Core_Exception;
 use crate::rmc::structures::qresult::ERROR_MASK;
 use crate::rmc::structures::RmcSerialize;
+use crate::util::SendingBufferConnection;
+
 pub enum RMCResponseResult {
     Success {
         call_id: u32,
@@ -145,7 +147,7 @@ pub fn generate_response(protocol_id: u8, response: RMCResponseResult) -> io::Re
 }
 
 pub async fn send_result(
-    connection: &SendingConnection,
+    connection: &SendingBufferConnection,
     result: Result<Vec<u8>, ErrorCode>,
     protocol_id: u8,
     method_id: u32,
@@ -173,7 +175,7 @@ pub async fn send_result(
     send_response(connection, response).await
 }
 
-pub async fn send_response(connection: &SendingConnection, rmcresponse: RMCResponse) {
+pub async fn send_response(connection: &SendingBufferConnection, rmcresponse: RMCResponse) {
     connection.send(rmcresponse.to_data()).await;
 }
 

@@ -7,6 +7,8 @@
 //! also the first and only current usage of rnex, expect this and rnex to be split into seperate
 //! repos soon.
 
+extern crate self as rust_nex;
+
 use crate::nex::account::Account;
 use crate::nex::auth_handler::{AuthHandler, RemoteAuthClientProtocol};
 use crate::nex::remote_console::RemoteConsole;
@@ -59,6 +61,10 @@ mod nex;
 mod result;
 mod versions;
 mod web;
+pub mod reggie;
+pub mod util;
+
+
 
 static KERBEROS_SERVER_PASSWORD: Lazy<String> = Lazy::new(|| {
     env::var("AUTH_SERVER_PASSWORD")
@@ -88,7 +94,7 @@ static OWN_IP_PRIVATE: Lazy<Ipv4Addr> = Lazy::new(|| {
     env::var("SERVER_IP")
         .ok()
         .and_then(|s| s.parse().ok())
-        .expect("no public ip specified")
+        .expect("no private ip specified")
 });
 
 static OWN_IP_PUBLIC: Lazy<String> =
@@ -135,7 +141,7 @@ async fn main() {
 
     dotenv::dotenv().ok();
 
-    start_servers().await;
+    //start_servers().await;
 }
 /*
 
@@ -278,7 +284,7 @@ async fn start_secure_server() -> SecureServer{
         socket,
     }
 }*/
-
+/*
 async fn start_auth() -> JoinHandle<()> {
     tokio::spawn(async {
         let (router_secure, _) = Router::new(SocketAddrV4::new(*OWN_IP_PRIVATE, *AUTH_SERVER_PORT))
@@ -414,3 +420,4 @@ async fn start_servers() {
     #[cfg(feature = "secure")]
     secure_server.await.expect("auth server crashed");
 }
+*/
