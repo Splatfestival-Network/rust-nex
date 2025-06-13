@@ -1,4 +1,4 @@
-use splatoon_server_rust::reggie::RemoteRmcTestProto;
+use rust_nex::reggie::RemoteRmcTestProto;
 use std::fs;
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -7,10 +7,10 @@ use rustls_pki_types::ServerName;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
 use tokio_rustls::{TlsConnector, TlsStream};
-use splatoon_server_rust::common::setup;
-use splatoon_server_rust::reggie::{establish_tls_connection_to, get_configured_tls_connector, RemoteTestProto, UnitPacketWrite};
-use splatoon_server_rust::rmc::protocols::{new_rmc_gateway_connection, OnlyRemote};
-use splatoon_server_rust::rmc::structures::RmcSerialize;
+use rust_nex::common::setup;
+use rust_nex::reggie::{establish_tls_connection_to, get_configured_tls_connector, RemoteTestProto, UnitPacketWrite};
+use rust_nex::rmc::protocols::{new_rmc_gateway_connection, OnlyRemote};
+use rust_nex::rmc::structures::RmcSerialize;
 
 
 #[tokio::main]
