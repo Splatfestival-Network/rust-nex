@@ -73,7 +73,7 @@ impl RmcProtocolData{
                     for (param_name, param_type) in parameters{
                         quote!{
                             let Ok(#param_name) =
-                                <#param_type as splatoon_server_rust::rmc::structures::RmcSerialize>::deserialize(
+                                <#param_type as rust_nex::rmc::structures::RmcSerialize>::deserialize(
                                 &mut cursor
                             ) else
                         }.to_tokens(tokens);
@@ -84,7 +84,7 @@ impl RmcProtocolData{
                             quote! {
                                 {
                                     log::error!(#error_msg);
-                                    return Err(splatoon_server_rust::rmc::response::ErrorCode::Core_InvalidArgument);
+                                    return Err(rust_nex::rmc::response::ErrorCode::Core_InvalidArgument);
                                 };
                             }.to_tokens(tokens)
                         } else {
@@ -116,7 +116,7 @@ impl RmcProtocolData{
                         quote!{
                             let retval = retval?;
                             let mut vec = Vec::new();
-                            splatoon_server_rust::rmc::structures::RmcSerialize::serialize(&retval, &mut vec).ok();
+                            rust_nex::rmc::structures::RmcSerialize::serialize(&retval, &mut vec).ok();
                             Ok(vec)
                         }.to_tokens(tokens);
                     }
@@ -126,7 +126,7 @@ impl RmcProtocolData{
             quote!{
                 async fn rmc_call_proto(
                     &self,
-                    remote_response_connection: &splatoon_server_rust::util::SendingBufferConnection,
+                    remote_response_connection: &rust_nex::util::SendingBufferConnection,
                     method_id: u32,
                     call_id: u32,
                     data: Vec<u8>,
@@ -165,7 +165,7 @@ impl RmcProtocolData{
                         }.to_tokens(tokens);
                         if self.has_returns {
                             quote! {
-                                Err(splatoon_server_rust::rmc::response::ErrorCode::Core_NotImplemented)
+                                Err(rust_nex::rmc::response::ErrorCode::Core_NotImplemented)
                             }.to_tokens(tokens);
                         }
                     });
@@ -176,7 +176,7 @@ impl RmcProtocolData{
 
                 if *has_returns{
                     quote!{
-                        splatoon_server_rust::rmc::response::send_result(
+                        rust_nex::rmc::response::send_result(
                             remote_response_connection,
                             ret,
                             #id,
@@ -209,7 +209,7 @@ impl RmcProtocolData{
         // boilerplate tokens which all raw traits need
         quote!{
             #[doc(hidden)]
-            pub trait #remote_name: splatoon_server_rust::rmc::protocols::HasRmcConnection
+            pub trait #remote_name: rust_nex::rmc::protocols::HasRmcConnection
         }.to_tokens(tokens);
 
         // generate the body of the raw protocol trait
@@ -247,12 +247,12 @@ impl RmcProtocolData{
 
                     for (param_name, param_type) in parameters{
                         quote!{
-                            splatoon_server_rust::result::ResultExtension::display_err_or_some(
-                                <#param_type as splatoon_server_rust::rmc::structures::RmcSerialize>::serialize(
+                            rust_nex::result::ResultExtension::display_err_or_some(
+                                <#param_type as rust_nex::rmc::structures::RmcSerialize>::serialize(
                                     &#param_name,
                                     &mut cursor
                                 )
-                            ).ok_or(splatoon_server_rust::rmc::response::ErrorCode::Core_InvalidArgument)
+                            ).ok_or(rust_nex::rmc::response::ErrorCode::Core_InvalidArgument)
                         }.to_tokens(tokens);
                         if self.has_returns {
                             quote! {
@@ -268,25 +268,25 @@ impl RmcProtocolData{
                     quote!{
                         let call_id = rand::random();
 
-                        let message = splatoon_server_rust::rmc::message::RMCMessage{
+                        let message = rust_nex::rmc::message::RMCMessage{
                             call_id,
                             method_id: #method_id,
                             protocol_id: #proto_id,
                             rest_of_data: send_data
                         };
 
-                        let rmc_conn = <Self as splatoon_server_rust::rmc::protocols::HasRmcConnection>::get_connection(self);
+                        let rmc_conn = <Self as rust_nex::rmc::protocols::HasRmcConnection>::get_connection(self);
                     }.to_tokens(tokens);
 
                     if *has_returns{
                         quote!{
-                            splatoon_server_rust::result::ResultExtension::display_err_or_some(
+                            rust_nex::result::ResultExtension::display_err_or_some(
                                 rmc_conn.make_raw_call(&message).await
-                            ).ok_or(splatoon_server_rust::rmc::response::ErrorCode::Core_Exception)
+                            ).ok_or(rust_nex::rmc::response::ErrorCode::Core_Exception)
                         }.to_tokens(tokens);
                     } else {
                         quote!{
-                            splatoon_server_rust::result::ResultExtension::display_err_or_some(
+                            rust_nex::result::ResultExtension::display_err_or_some(
                                 rmc_conn.make_raw_call_no_response(&message).await
                             );
                         }.to_tokens(tokens);

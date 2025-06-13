@@ -157,7 +157,7 @@ macro_rules! define_rmc_proto {
     }) => {
         paste::paste!{
             pub trait [<Local $name>]: std::any::Any $( + [<Raw $protocol>] + $protocol)* {
-                async fn rmc_call(&self, remote_response_connection: &splatoon_server_rust::util::SendingBufferConnection, protocol_id: u16, method_id: u32, call_id: u32, rest: Vec<u8>){
+                async fn rmc_call(&self, remote_response_connection: &rust_nex::util::SendingBufferConnection, protocol_id: u16, method_id: u32, call_id: u32, rest: Vec<u8>){
                     match protocol_id{
                         $(
                             [<Raw $protocol Info>]::PROTOCOL_ID => <Self as [<Raw $protocol>]>::rmc_call_proto(self, remote_response_connection, method_id, call_id, rest).await,
@@ -167,16 +167,16 @@ macro_rules! define_rmc_proto {
                 }
             }
 
-            pub struct [<Remote $name>](splatoon_server_rust::rmc::protocols::RmcConnection);
+            pub struct [<Remote $name>](rust_nex::rmc::protocols::RmcConnection);
 
-            impl splatoon_server_rust::rmc::protocols::RemoteInstantiatable for [<Remote $name>]{
-                fn new(conn: splatoon_server_rust::rmc::protocols::RmcConnection) -> Self{
+            impl rust_nex::rmc::protocols::RemoteInstantiatable for [<Remote $name>]{
+                fn new(conn: rust_nex::rmc::protocols::RmcConnection) -> Self{
                     Self(conn)
                 }
             }
 
-            impl splatoon_server_rust::rmc::protocols::HasRmcConnection for [<Remote $name>]{
-                fn get_connection(&self) -> &splatoon_server_rust::rmc::protocols::RmcConnection{
+            impl rust_nex::rmc::protocols::HasRmcConnection for [<Remote $name>]{
+                fn get_connection(&self) -> &rust_nex::rmc::protocols::RmcConnection{
                     &self.0
                 }
             }

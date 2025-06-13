@@ -1,5 +1,5 @@
 [package]
-name = "splatoon-server-rust"
+name = "rust-nex"
 version = "0.1.0"
 edition = "2021"
 

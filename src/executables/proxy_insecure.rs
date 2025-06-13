@@ -17,13 +17,13 @@ use rsa::signature::{RandomizedSigner, SignatureEncoding};
 use sha2::Sha256;
 use tokio::net::TcpSocket;
 use tokio::task;
-use splatoon_server_rust::common::setup;
-use splatoon_server_rust::prudp::packet::VirtualPort;
-use splatoon_server_rust::prudp::router::Router;
-use splatoon_server_rust::prudp::unsecure::Unsecure;
-use splatoon_server_rust::reggie::{establish_tls_connection_to, UnitPacketRead, UnitPacketWrite};
-use splatoon_server_rust::rmc::structures::RmcSerialize;
-use splatoon_server_rust::rnex_proxy_common::ConnectionInitData;
+use rust_nex::common::setup;
+use rust_nex::prudp::packet::VirtualPort;
+use rust_nex::prudp::router::Router;
+use rust_nex::prudp::unsecure::Unsecure;
+use rust_nex::reggie::{establish_tls_connection_to, UnitPacketRead, UnitPacketWrite};
+use rust_nex::rmc::structures::RmcSerialize;
+use rust_nex::rnex_proxy_common::ConnectionInitData;
 
 static OWN_IP_PRIVATE: Lazy<Ipv4Addr> = Lazy::new(|| {
     env::var("SERVER_IP")

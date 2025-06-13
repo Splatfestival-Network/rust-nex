@@ -9,8 +9,8 @@ use rustls::{
     SignatureScheme,
 };
 use rustls_pki_types::PrivateKeyDer;
-use splatoon_server_rust::common::setup;
-use splatoon_server_rust::reggie::{get_configured_tls_acceptor, TestStruct, ROOT_TRUST_ANCHOR, SELF_CERT, SELF_KEY};
+use rust_nex::common::setup;
+use rust_nex::reggie::{get_configured_tls_acceptor, TestStruct, ROOT_TRUST_ANCHOR, SELF_CERT, SELF_KEY};
 use std::borrow::ToOwned;
 use std::fs;
 use std::io::Cursor;
@@ -21,10 +21,10 @@ use tokio::io::AsyncReadExt;
 use tokio::net::{TcpListener, TcpSocket};
 use tokio::task;
 use tokio_rustls::TlsAcceptor;
-use splatoon_server_rust::define_rmc_proto;
-use splatoon_server_rust::rmc::protocols::new_rmc_gateway_connection;
-use splatoon_server_rust::rmc::response::ErrorCode;
-use splatoon_server_rust::rmc::structures::RmcSerialize;
+use rust_nex::define_rmc_proto;
+use rust_nex::rmc::protocols::new_rmc_gateway_connection;
+use rust_nex::rmc::response::ErrorCode;
+use rust_nex::rmc::structures::RmcSerialize;
 
 
 

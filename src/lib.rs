@@ -1,4 +1,4 @@
-extern crate self as splatoon_server_rust;
+extern crate self as rust_nex;
 
 pub mod endianness;
 pub mod prudp;

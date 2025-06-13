@@ -7,7 +7,7 @@
 //! also the first and only current usage of rnex, expect this and rnex to be split into seperate
 //! repos soon.
 
-extern crate self as splatoon_server_rust;
+extern crate self as rust_nex;
 
 use crate::nex::account::Account;
 use crate::nex::auth_handler::{AuthHandler, RemoteAuthClientProtocol};

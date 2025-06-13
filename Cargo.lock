@@ -2204,6 +2204,48 @@ dependencies = [
 ]
 
 [[package]]
+name = "rust-nex"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bytemuck",
+ "chacha20",
+ "chrono",
+ "ctrlc",
+ "dotenv",
+ "futures",
+ "hex",
+ "hmac",
+ "json",
+ "log",
+ "macros",
+ "md-5",
+ "once_cell",
+ "paste",
+ "prost",
+ "rand 0.8.5",
+ "rc4",
+ "reqwest",
+ "rocket",
+ "rsa",
+ "rustls",
+ "rustls-pki-types",
+ "rustls-webpki",
+ "serde",
+ "sha2",
+ "simplelog",
+ "thiserror",
+ "tokio",
+ "tokio-rustls",
+ "tokio-stream",
+ "tonic",
+ "tonic-build",
+ "typenum",
+ "v_byte_macros",
+]
+
+[[package]]
 name = "rustc-demangle"
 version = "0.1.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2481,48 +2523,6 @@ checksum = "d91ed6c858b01f942cd56b37a94b3e0a1798290327d1236e4d9cf4eaca44d29d"
 dependencies = [
  "base64ct",
  "der",
-]
-
-[[package]]
-name = "splatoon-server-rust"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "bytemuck",
- "chacha20",
- "chrono",
- "ctrlc",
- "dotenv",
- "futures",
- "hex",
- "hmac",
- "json",
- "log",
- "macros",
- "md-5",
- "once_cell",
- "paste",
- "prost",
- "rand 0.8.5",
- "rc4",
- "reqwest",
- "rocket",
- "rsa",
- "rustls",
- "rustls-pki-types",
- "rustls-webpki",
- "serde",
- "sha2",
- "simplelog",
- "thiserror",
- "tokio",
- "tokio-rustls",
- "tokio-stream",
- "tonic",
- "tonic-build",
- "typenum",
- "v_byte_macros",
 ]
 
 [[package]]

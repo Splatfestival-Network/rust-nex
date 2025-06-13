@@ -5,7 +5,7 @@ use log::error;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::task;
-use splatoon_server_rust::reggie::{UnitPacketRead, UnitPacketWrite};
+use rust_nex::reggie::{UnitPacketRead, UnitPacketWrite};
 
 #[derive(Clone)]
 pub struct SendingBufferConnection(Sender<Vec<u8>>);
