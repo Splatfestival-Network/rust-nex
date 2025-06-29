@@ -127,11 +127,15 @@ async fn main() {
     });
 
     while let Ok((stream, _sock_addr)) = socket.accept().await {
-        let websocket = tokio_tungstenite::accept_async(stream).await.unwrap();
+        let Ok(websocket) = tokio_tungstenite::accept_async(stream).await else {
+            continue;
+        };
 
         let stream = WebStreamSocket::new(websocket);
-        
-        let mut stream = acceptor.accept(stream).await.unwrap();
+
+        let Ok(mut stream) = acceptor.accept(stream).await else{
+            continue;
+        };
         let server_controller = server_controller.clone();
         tokio::spawn(async move {
             let server_controller = server_controller;
