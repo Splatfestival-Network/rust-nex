@@ -1,6 +1,6 @@
 use std::{env, fs, io};
 use std::io::{Error, ErrorKind};
-use std::net::SocketAddrV4;
+use std::net::{SocketAddrV4, ToSocketAddrs};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -129,7 +129,7 @@ impl<T: AsyncWrite + Unpin> UnitPacketWrite for T{}
 pub async fn establish_tls_connection_to(address: &str, server_name: &str) -> TlsStream<TcpStream>{
     let connector = get_configured_tls_connector().await;
 
-    let stream = TcpStream::connect(address).await.unwrap();
+    let stream = TcpStream::connect((address, 80u16).to_socket_addrs().unwrap().next().unwrap()).await.unwrap();
 
     let stream = connector.connect(ServerName::try_from(server_name.to_owned()).unwrap(), stream).await
         .expect("unable to connect via tls");
