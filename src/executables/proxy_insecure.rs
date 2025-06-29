@@ -1,6 +1,5 @@
 
-
-use rust_nex::executables::common::{LocalProxy, ProxyManagement, RemoteController, OWN_IP_PUBLIC};
+use rust_nex::reggie::LocalProxy;
 use std::env;
 use std::ffi::CStr;
 use std::io::{Read, Write};
@@ -24,14 +23,14 @@ use tokio::sync::RwLock;
 use tokio::task;
 use tokio::time::sleep;
 use rust_nex::common::setup;
-use rust_nex::executables::common::{OWN_IP_PRIVATE, SERVER_PORT};
-use rust_nex::executables::common::ServerCluster::Auth;
-use rust_nex::executables::common::ServerType::{Backend, Proxy};
+use rust_nex::executables::common::{OWN_IP_PRIVATE, OWN_IP_PUBLIC, SERVER_PORT};
 use rust_nex::prudp::packet::VirtualPort;
 use rust_nex::prudp::router::Router;
 use rust_nex::prudp::station_url::StationUrl;
 use rust_nex::prudp::unsecure::Unsecure;
-use rust_nex::reggie::{establish_tls_connection_to, UnitPacketRead, UnitPacketWrite};
+use rust_nex::reggie::{establish_tls_connection_to, ProxyManagement, UnitPacketRead, UnitPacketWrite};
+use rust_nex::reggie::ServerCluster::Auth;
+use rust_nex::reggie::ServerType::Proxy;
 use rust_nex::rmc::protocols::OnlyRemote;
 use rust_nex::rmc::response::ErrorCode;
 use rust_nex::rmc::structures::RmcSerialize;

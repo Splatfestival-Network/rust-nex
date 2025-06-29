@@ -1,10 +1,11 @@
 use std::{env, fs, io};
 use std::io::{Error, ErrorKind};
+use std::net::SocketAddrV4;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use futures::{SinkExt, StreamExt};
-use macros::{method_id, rmc_proto, rmc_struct};
+use macros::{method_id, rmc_proto, rmc_struct, RmcSerialize};
 use once_cell::sync::Lazy;
 use rustls::{ClientConfig, RootCertStore, ServerConfig};
 use rustls::client::WebPkiServerVerifier;
@@ -20,6 +21,7 @@ use tokio_tungstenite::tungstenite::Message;
 use webpki::anchor_from_trusted_cert;
 use rust_nex::common::setup;
 use crate::define_rmc_proto;
+use crate::nex::account::Account;
 use crate::rmc::protocols::{new_rmc_gateway_connection, OnlyRemote, RmcCallable, RmcConnection};
 use crate::rmc::response::ErrorCode;
 use crate::rmc::structures::RmcSerialize;
@@ -365,3 +367,53 @@ async fn test_server(){
         });
     }
 }
+
+
+
+#[rmc_proto(1)]
+pub trait ProxyManagement {
+    #[method_id(1)]
+    async fn update_url(&self, url: String) -> Result<(), ErrorCode>;
+}
+
+define_rmc_proto!(
+    proto Proxy{
+        ProxyManagement
+    }
+);
+
+#[rmc_proto(2)]
+pub trait ControllerManagement {
+    #[method_id(1)]
+    async fn get_secure_proxy_url(&self) -> Result<String, ErrorCode>;
+
+    #[method_id(2)]
+    async fn get_secure_account(&self) -> Result<Account, ErrorCode>;
+}
+
+define_rmc_proto!(
+    proto Controller{
+        ControllerManagement
+    }
+);
+
+#[derive(RmcSerialize)]
+#[repr(u32)]
+pub enum ServerCluster{
+    Auth = 0,
+    Secure = 1
+}
+
+#[derive(RmcSerialize)]
+#[repr(u32)]
+pub enum ServerType{
+    Proxy{
+        addr: SocketAddrV4,
+        cluster: ServerCluster
+    } = 1,
+    Backend{
+        name: String,
+        cluster: ServerCluster
+    } = 2,
+}
+
