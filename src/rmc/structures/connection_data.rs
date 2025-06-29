@@ -1,8 +1,7 @@
-use std::io::{Read, Write};
-use bytemuck::bytes_of;
+
 use macros::RmcSerialize;
 use crate::kerberos::KerberosDateTime;
-use crate::rmc::structures::{rmc_struct, RmcSerialize};
+use crate::rmc::structures::RmcSerialize;
 
 #[derive(Debug, RmcSerialize)]
 #[rmc_struct(1)]

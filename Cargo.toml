@@ -54,6 +54,8 @@ rustls = "0.23.27"
 rustls-pki-types = "1.12.0"
 rustls-webpki = "0.103.3"
 tokio-rustls = "0.26.2"
+tokio-tungstenite = "0.27.0"
+tungstenite = "0.27.0"
 
 
 
@@ -65,6 +67,7 @@ tonic-build = "0.12.3"
 default = ["secure", "auth"]
 secure = []
 auth = []
+no_tls = []
 
 [[bin]]
 name = "proxy_insecure"
@@ -82,3 +85,7 @@ path = "src/executables/backend_server_insecure.rs"
 [[bin]]
 name = "backend_server_secure"
 path = "src/executables/backend_server_secure.rs"
+
+[[bin]]
+name = "control_server"
+path = "src/executables/control_server.rs"

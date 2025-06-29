@@ -1,14 +1,12 @@
-use std::io::ErrorKind::HostUnreachable;
 use crate::define_rmc_proto;
 use crate::nex::matchmake::{ExtendedMatchmakeSession, MatchmakeManager};
 use crate::nex::remote_console::RemoteConsole;
 use crate::prudp::sockaddr::PRUDPSockAddr;
-use crate::prudp::station_url::Type::{PRUDP, PRUDPS};
 use crate::prudp::station_url::UrlOptions::{
-    Address, NatFiltering, NatMapping, NatType, Platform, Port, PrincipalID, RVConnectionID,
-    StreamID, PMP, UPNP,
+    Address, NatFiltering, NatMapping, NatType, Port, PrincipalID, RVConnectionID,
+
 };
-use crate::prudp::station_url::{nat_types, StationUrl, Type};
+use crate::prudp::station_url::{StationUrl};
 use crate::rmc::protocols::matchmake::{
     Matchmake, RawMatchmake, RawMatchmakeInfo, RemoteMatchmake,
 };
@@ -24,15 +22,12 @@ use crate::rmc::structures::matchmake::{AutoMatchmakeParam, CreateMatchmakeSessi
 
 use crate::rmc::structures::qresult::QResult;
 use macros::rmc_struct;
-use std::net::{Ipv4Addr, SocketAddrV4};
 use std::sync::{Arc, Weak};
-use log::{error, info};
-use rocket::http::ext::IntoCollection;
+use log::info;
 use tokio::sync::{Mutex, RwLock};
-use tonic::Code::InvalidArgument;
 use crate::prudp::station_url::nat_types::PUBLIC;
 use crate::rmc::protocols::notifications::{NotificationEvent, RemoteNotification};
-use crate::rmc::response::ErrorCode::{Core_Exception, Core_InvalidArgument, RendezVous_AccountExpired, RendezVous_SessionVoid};
+use crate::rmc::response::ErrorCode::{Core_Exception, Core_InvalidArgument, RendezVous_AccountExpired};
 
 define_rmc_proto!(
     proto UserProtocol{
@@ -129,7 +124,7 @@ impl Secure for User {
             public_station
         };
 
-        let mut both = [&mut public_station, &mut private_station];
+        let both = [&mut public_station, &mut private_station];
 
         for station in both {
             station.options.retain(|v| {
@@ -208,7 +203,7 @@ impl MatchmakeExtension for User {
         Ok(())
     }
 
-    async fn get_playing_session(&self, pids: Vec<u32>) -> Result<Vec<()>, ErrorCode> {
+    async fn get_playing_session(&self, _pids: Vec<u32>) -> Result<Vec<()>, ErrorCode> {
         Ok(Vec::new())
     }
 
@@ -385,7 +380,7 @@ impl MatchmakeExtension for User {
 }
 
 impl Matchmake for User {
-    async fn unregister_gathering(&self, gid: u32) -> Result<bool, ErrorCode> {
+    async fn unregister_gathering(&self, _gid: u32) -> Result<bool, ErrorCode> {
         Ok(true)
     }
     async fn get_session_urls(&self, gid: u32) -> Result<Vec<StationUrl>, ErrorCode> {
@@ -460,7 +455,7 @@ impl Matchmake for User {
         Ok(())
     }
 
-    async fn migrate_gathering_ownership(&self, gid: u32, candidates: Vec<u32>, participants_only: bool) -> Result<(), ErrorCode> {
+    async fn migrate_gathering_ownership(&self, gid: u32, candidates: Vec<u32>, _participants_only: bool) -> Result<(), ErrorCode> {
         let session = self.matchmake_manager.get_session(gid).await?;
         let mut session = session.lock().await;
 
@@ -522,11 +517,11 @@ impl NatTraversal for User {
         Ok(())
     }
 
-    async fn report_nat_traversal_result(&self, cid: u32, result: bool, rtt: u32) -> Result<(), ErrorCode> {
+    async fn report_nat_traversal_result(&self, _cid: u32, _result: bool, _rtt: u32) -> Result<(), ErrorCode> {
         Ok(())
     }
 
-    async fn request_probe_initiation(&self, station_to_probe: String) -> Result<(), ErrorCode> {
+    async fn request_probe_initiation(&self, _station_to_probe: String) -> Result<(), ErrorCode> {
         info!("NO!");
         Err(RendezVous_AccountExpired)
     }

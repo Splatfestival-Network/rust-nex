@@ -23,9 +23,11 @@ use tokio::net::{TcpListener, TcpSocket};
 use tokio::task;
 use tokio_rustls::TlsAcceptor;
 use rust_nex::define_rmc_proto;
-use rust_nex::executables::common::{OWN_IP_PRIVATE, SECURE_SERVER_ACCOUNT, SERVER_PORT};
+use rust_nex::executables::common::{RemoteController, OWN_IP_PRIVATE, SECURE_SERVER_ACCOUNT, SERVER_PORT};
+use rust_nex::executables::common::ServerCluster::{Auth, Secure};
+use rust_nex::executables::common::ServerType::Backend;
 use rust_nex::nex::auth_handler::AuthHandler;
-use rust_nex::rmc::protocols::new_rmc_gateway_connection;
+use rust_nex::rmc::protocols::{new_rmc_gateway_connection, OnlyRemote};
 use rust_nex::rmc::response::ErrorCode;
 use rust_nex::rmc::structures::RmcSerialize;
 use rust_nex::rnex_proxy_common::ConnectionInitData;
@@ -44,16 +46,20 @@ pub static SECURE_PROXY_PORT: Lazy<u16> = Lazy::new(|| {
         .unwrap_or(10000)
 });
 
-static SECURE_STATION_URL: Lazy<String> = Lazy::new(|| {
-    format!(
-        "prudps:/PID=2;sid=1;stream=10;type=2;address={};port={};CID=1",
-        *SECURE_PROXY_ADDR, *SECURE_PROXY_PORT
-    )
-});
-
 #[tokio::main]
 async fn main() {
     setup();
+
+    let conn = rust_nex::reggie::rmc_connect_to(
+        "agmp-control.spfn.net",
+        Backend{
+            name: "agmp-auth-1.spfn.net".to_string(),
+            cluster: Auth
+        },
+        |r| Arc::new(OnlyRemote::<RemoteController>::new(r))
+    ).await;
+    let conn = conn.unwrap();
+
 
     let acceptor = get_configured_tls_acceptor().await;
 
@@ -84,14 +90,14 @@ async fn main() {
                 continue;
             }
         };
-
+        let controller = conn.clone();
         task::spawn(async move {
             info!("connection to secure backend established");
             new_rmc_gateway_connection(stream.into(), |_| {
                 Arc::new(AuthHandler {
                     destination_server_acct: &SECURE_SERVER_ACCOUNT,
                     build_name: "branch:origin/project/wup-agmj build:3_8_15_2004_0",
-                    station_url: &SECURE_STATION_URL,
+                    control_server: controller
                 })
             });
         });

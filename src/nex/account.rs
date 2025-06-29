@@ -1,10 +1,11 @@
+use macros::RmcSerialize;
 
-
+#[derive(RmcSerialize)]
+#[derive(Clone)]
 pub struct Account{
     pub pid: u32,
-    pub username: Box<str>,
+    pub username: String,
     pub kerbros_password: [u8; 16],
-
 }
 
 impl Account{

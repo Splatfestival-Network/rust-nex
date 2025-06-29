@@ -1,18 +1,26 @@
 use std::{env, fs, io};
+use std::io::{Error, ErrorKind};
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll};
+use futures::{SinkExt, StreamExt};
 use macros::{method_id, rmc_proto, rmc_struct};
 use once_cell::sync::Lazy;
 use rustls::{ClientConfig, RootCertStore, ServerConfig};
 use rustls::client::WebPkiServerVerifier;
 use rustls::server::WebPkiClientVerifier;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer, ServerName, TrustAnchor};
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use tokio::net::TcpStream;
+use thiserror::Error;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf};
+use tokio::net::{TcpListener, TcpStream};
 use tokio_rustls::{TlsAcceptor, TlsConnector};
 use tokio_rustls::client::TlsStream;
+use tokio_tungstenite::{connect_async, WebSocketStream};
+use tokio_tungstenite::tungstenite::Message;
 use webpki::anchor_from_trusted_cert;
+use rust_nex::common::setup;
 use crate::define_rmc_proto;
-use crate::endianness::IS_BIG_ENDIAN;
+use crate::rmc::protocols::{new_rmc_gateway_connection, OnlyRemote, RmcCallable, RmcConnection};
 use crate::rmc::response::ErrorCode;
 use crate::rmc::structures::RmcSerialize;
 
@@ -116,12 +124,12 @@ pub trait UnitPacketWrite: AsyncWrite + Unpin{
 
 impl<T: AsyncWrite + Unpin> UnitPacketWrite for T{}
 
-pub async fn establish_tls_connection_to(address: &str, server_name: &'static str) -> TlsStream<TcpStream>{
+pub async fn establish_tls_connection_to(address: &str, server_name: &str) -> TlsStream<TcpStream>{
     let connector = get_configured_tls_connector().await;
 
     let stream = TcpStream::connect(address).await.unwrap();
 
-    let stream = connector.connect(ServerName::try_from(server_name).unwrap(), stream).await
+    let stream = connector.connect(ServerName::try_from(server_name.to_owned()).unwrap(), stream).await
         .expect("unable to connect via tls");
 
     stream
@@ -145,5 +153,215 @@ pub struct TestStruct;
 impl RmcTestProto for TestStruct{
     async fn test(&self) -> Result<String, ErrorCode> {
         Ok("heya".into())
+    }
+}
+
+
+pub struct WebStreamSocket<T: AsyncRead + AsyncWrite + Unpin> {
+    socket: WebSocketStream<T>,
+    incoming_buffer: Vec<u8>,
+    finished_reading: bool,
+}
+
+impl<T: AsyncRead + AsyncWrite + Unpin> WebStreamSocket<T> {
+    pub fn new(socket: WebSocketStream<T>) -> Self{
+        Self{
+            incoming_buffer: Default::default(),
+            socket,
+            finished_reading: false,
+        }
+    }
+}
+
+impl<T: AsyncRead + AsyncWrite + Unpin> AsyncWrite for WebStreamSocket<T> {
+    fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize, Error>> {
+        let this = &mut self.get_mut().socket;
+
+        let msg = Message::binary(buf.to_vec());
+
+        match this.poll_ready_unpin(cx) {
+            Poll::Pending => return Poll::Pending,
+            Poll::Ready(Err(e)) => return Poll::Ready(Err(Error::new(ErrorKind::Other, e))),
+            Poll::Ready(Ok(())) => {
+                // continue on
+            }
+        }
+
+        let Err(e) = this.start_send_unpin(msg) else {
+            return Poll::Ready(Ok(buf.len()));
+        };
+
+
+        Poll::Ready(Err(Error::new(ErrorKind::Other, e)))
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
+        let this = &mut self.get_mut().socket;
+
+        match this.poll_flush_unpin(cx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(Err(e)) => Poll::Ready(Err(Error::new(ErrorKind::Other, e))),
+            Poll::Ready(Ok(())) => Poll::Ready(Ok(()))
+        }
+    }
+
+    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
+        let this = &mut self.get_mut().socket;
+
+        match this.poll_close_unpin(cx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(Err(e)) => Poll::Ready(Err(Error::new(ErrorKind::Other, e))),
+            Poll::Ready(Ok(())) => Poll::Ready(Ok(()))
+        }
+    }
+}
+
+impl<T: AsyncRead + AsyncWrite + Unpin> AsyncRead for WebStreamSocket<T> {
+    fn poll_read(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut ReadBuf<'_>) -> Poll<io::Result<()>> {
+        let Self {
+            incoming_buffer,
+            socket,
+            finished_reading
+        } = &mut self.get_mut();
+
+        if !*finished_reading {
+            match socket.poll_next_unpin(cx) {
+                Poll::Ready(Some(Ok(msg))) => {
+                    let Message::Binary(data) = msg else {
+                        return Poll::Ready(Err(Error::new(ErrorKind::InvalidData, "got non binary data when trying to emulate stream")));
+                    };
+
+                    incoming_buffer.extend_from_slice(&data);
+                }
+                Poll::Ready(Some(Err(e))) if incoming_buffer.is_empty() => {
+                    return Poll::Ready(Err(Error::new(ErrorKind::Other, e)));
+                }
+                Poll::Ready(None) if incoming_buffer.is_empty() => {
+                    *finished_reading = true;
+                }
+                Poll::Pending if incoming_buffer.is_empty() => {
+                    return Poll::Pending
+                }
+                _ => {}
+            }
+        }
+
+
+
+        if !incoming_buffer.is_empty(){
+            let read_ammount = buf.remaining();
+
+            let ammount_taken = read_ammount.min(incoming_buffer.len());
+
+            buf.put_slice(&incoming_buffer[0..ammount_taken]);
+
+            *incoming_buffer = (&incoming_buffer.get(ammount_taken..).unwrap_or(&[])).to_vec();
+        }
+
+        Poll::Ready(Ok(()))
+
+
+        /*if buf.remaining() == 0{
+
+
+            return Poll::Ready(Ok(()));
+        }
+
+        match socket.poll_next_unpin(cx) {
+            Poll::Ready(Some(Ok(msg))) => {
+                let Message::Binary(data) = msg else {
+                    return Poll::Ready(Err(Error::new(ErrorKind::InvalidData, "got non binary data when trying to emulate stream")));
+                };
+
+                if data.len() <= buf.remaining() {
+                    // if no data remains there is no reason to store anything
+                    buf.put_slice(&data);
+                } else {
+                    let read_ammount = buf.remaining();
+
+                    let ammount_taken = read_ammount.min(data.len());
+
+                    buf.put_slice(&data[..ammount_taken]);
+
+                    *incoming_buffer = data[ammount_taken..].to_vec();
+                }
+
+
+                Poll::Ready(Ok(()))
+            }
+            Poll::Ready(Some(Err(e))) => Poll::Ready(Err(Error::new(ErrorKind::Other, e))),
+            // EOF
+            Poll::Ready(None) => Poll::Ready(Ok(())),
+            Poll::Pending => Poll::Pending
+        }*/
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum ConnectError{
+    #[error(transparent)]
+    Tungstenite(#[from] tungstenite::error::Error),
+    #[error(transparent)]
+    DataSendError(#[from] io::Error),
+}
+
+pub async fn rmc_connect_to<T: RmcCallable + Sync + Send + 'static, U: RmcSerialize, F>(url: &str, init_data: U, create_func: F) -> Result<Arc<T>, ConnectError>
+    where
+    F: FnOnce(RmcConnection) -> Arc<T>{
+    let (stream, _)= connect_async(format!("ws://{}/", url)).await?;
+
+    let webstreamsocket = WebStreamSocket::new(stream);
+
+    let connector = get_configured_tls_connector().await;
+
+    let mut connection = connector.connect(ServerName::try_from(url.to_string()).unwrap(), webstreamsocket).await.unwrap();
+
+    connection.send_buffer(&init_data.to_data()).await?;
+
+    let rmc = new_rmc_gateway_connection(connection.into(), create_func);
+    
+    Ok(rmc)
+}
+
+#[tokio::test]
+async fn test(){
+    setup();
+    
+    let socket = connect_async("ws://192.168.178.120:12345/").await;
+    let (stream, resp) = socket.unwrap();
+
+    let mut webstreamsocket = WebStreamSocket::new(stream);
+
+    let connector = get_configured_tls_connector().await;
+
+    let connection = connector.connect(ServerName::try_from("agmp-tv.spfn.net").unwrap(), webstreamsocket).await.unwrap();
+
+    let rmc = new_rmc_gateway_connection(connection.into(), |r| {
+        Arc::new(OnlyRemote::<RemoteTestProto>::new(r))
+    });
+
+    println!("{:?}", rmc.test().await);
+}
+
+#[tokio::test]
+async fn test_server(){
+    setup();
+    
+    let socket = TcpListener::bind("192.168.178.120:12345").await.unwrap();
+
+    let acceptor = get_configured_tls_acceptor().await;
+
+    while let Ok((stream, _sock_addr)) = socket.accept().await{
+        let websocket = tokio_tungstenite::accept_async(stream).await.unwrap();
+
+        let webstreamsocket = WebStreamSocket::new(websocket);
+
+        let stream = acceptor.accept(webstreamsocket).await.unwrap();
+
+        new_rmc_gateway_connection(stream.into(), |_| {
+            Arc::new(
+                TestStruct
+            )
+        });
     }
 }

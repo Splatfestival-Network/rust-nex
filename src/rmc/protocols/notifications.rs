@@ -1,6 +1,4 @@
 use macros::{method_id, rmc_proto, rmc_struct, RmcSerialize};
-use crate::rmc::response::ErrorCode;
-use crate::rmc::structures::qresult::QResult;
 
 pub mod notification_types{
     pub const OWNERSHIP_CHANGED: u32 = 4000;

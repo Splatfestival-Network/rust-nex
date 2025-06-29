@@ -1,6 +1,5 @@
 use macros::{method_id, rmc_proto};
 use crate::rmc::response::ErrorCode;
-use crate::rmc::structures::matchmake::{CreateMatchmakeSessionParam, MatchmakeSession};
 
 #[rmc_proto(3)]
 pub trait NatTraversal{

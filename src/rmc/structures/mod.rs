@@ -35,9 +35,9 @@ pub mod variant;
 pub mod ranking;
 mod networking;
 
-pub trait RmcSerialize: Sized{
+pub trait RmcSerialize{
     fn serialize(&self, writer: &mut dyn Write) -> Result<()>;
-    fn deserialize(reader: &mut dyn Read) -> Result<Self>;
+    fn deserialize(reader: &mut dyn Read) -> Result<Self> where Self: Sized;
 
     fn to_data(&self) -> Vec<u8>{
         let mut data = Vec::new();

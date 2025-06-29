@@ -1,5 +1,6 @@
 #![allow(dead_code)]
-#![warn(missing_docs)]
+#![allow(async_fn_in_trait)]
+//#![warn(missing_docs)]
 
 //! # Splatoon RNEX server
 //!
@@ -63,6 +64,7 @@ mod versions;
 mod web;
 pub mod reggie;
 pub mod util;
+pub mod common;
 
 
 

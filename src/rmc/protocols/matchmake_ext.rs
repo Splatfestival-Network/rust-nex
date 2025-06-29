@@ -1,5 +1,4 @@
 use macros::{method_id, rmc_proto};
-use crate::prudp::station_url::StationUrl;
 use crate::rmc::response::ErrorCode;
 
 #[rmc_proto(50)]

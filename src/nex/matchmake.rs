@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::{Arc, Weak};
 use std::sync::atomic::AtomicU32;
-use std::sync::atomic::Ordering::{Relaxed, Release};
+use std::sync::atomic::Ordering::Relaxed;
 use std::time::Duration;
 use log::info;
 use rand::random;
@@ -50,7 +50,7 @@ impl MatchmakeManager{
     async fn garbage_collect(&self){
         info!("running rnex garbage collector over all sessions and users");
 
-        let mut idx = 0;
+        let idx = 0;
 
         let mut to_be_deleted_gids = Vec::new();
 
@@ -64,7 +64,7 @@ impl MatchmakeManager{
             
             session_pair
         }{
-            let mut session = session.lock().await;
+            let session = session.lock().await;
 
             if !session.is_reachable(){
                 to_be_deleted_gids.push(gid);

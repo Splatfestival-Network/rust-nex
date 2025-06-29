@@ -19,6 +19,7 @@ impl RmcSerialize for SocketAddrV4{
     }
 }
 
+
 impl RmcSerialize for VirtualPort{
     fn serialize(&self, writer: &mut dyn Write) -> crate::rmc::structures::Result<()> {
         self.0.serialize(writer)?;

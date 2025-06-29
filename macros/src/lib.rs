@@ -2,128 +2,74 @@ mod protos;
 
 extern crate proc_macro;
 
-use proc_macro2::{Ident, Literal, Span, TokenTree};
+use crate::protos::{ProtoMethodData, RmcProtocolData};
 use proc_macro::TokenStream;
-use std::iter::FromIterator;
-use std::mem;
-use syn::{parse_macro_input, DeriveInput, Data, PathSegment, TraitItem, FieldsNamed, Fields, Visibility, Type, TypePath, Path, ImplItem, ImplItemConst, Expr, ExprLit, Lit, TypeParamBound, TraitBound, TraitBoundModifier, LitInt, Token, FnArg, Receiver, PatType, Pat, TypeInfer, TypeReference, TraitItemFn, Signature, Block, Stmt, Local, LocalInit, LitStr, PathArguments, ReturnType};
-use quote::{quote, ToTokens, TokenStreamExt};
-use syn::buffer::TokenBuffer;
-use syn::parse::{Parse, ParseBuffer, ParseStream};
+use proc_macro2::{Ident, Literal, Span};
+use quote::{quote, TokenStreamExt};
+use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
-use syn::token::Comma;
-use syn::Visibility::Public;
-use crate::protos::{ProtoMethodData, RmcProtocolData};
+use syn::{
+    parse_macro_input, Attribute, Data, DataStruct, DeriveInput, Fields, FnArg, LitInt, Pat, Token,
+    TraitItem,
+};
 
-fn self_referece_type() -> Type {
-    Type::Reference(
-        TypeReference {
-            and_token: Default::default(),
-            lifetime: None,
-            mutability: None,
-            elem: Box::new(Type::Path(
-                TypePath {
-                    qself: None,
-                    path: Path {
-                        leading_colon: None,
-                        segments: {
-                            let mut punct = Punctuated::new();
-
-                            punct.push_value(PathSegment{
-                                ident: Ident::new("Self", Span::call_site()),
-                                arguments: PathArguments::None
-                            });
-
-                            punct
-                        }
-                    }
-                }
-            ))
-        }
-    )
-}
-
-struct ProtoInputParams{
+struct ProtoInputParams {
     proto_num: LitInt,
-    properties: Option<(Token![,], Punctuated<Ident, Token![,]>)>
+    properties: Option<(Token![,], Punctuated<Ident, Token![,]>)>,
 }
 
-impl Parse for ProtoInputParams{
+impl Parse for ProtoInputParams {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let proto_num = input.parse()?;
 
-        if let Some(seperator) = input.parse()?{
+        if let Some(seperator) = input.parse()? {
             let mut punctuated = Punctuated::new();
             loop {
-                punctuated.push_value(
-                    input.parse()?
-                );
+                punctuated.push_value(input.parse()?);
                 if let Some(punct) = input.parse()? {
                     punctuated.push_punct(punct);
                 } else {
-                    return Ok(
-                        Self{
-                            proto_num,
-                            properties: Some((seperator, punctuated))
-                        }
-                    )
+                    return Ok(Self {
+                        proto_num,
+                        properties: Some((seperator, punctuated)),
+                    });
                 }
             }
         } else {
-            Ok(
-                Self{
-                    proto_num,
-                    properties: None
-                }
-            )
+            Ok(Self {
+                proto_num,
+                properties: None,
+            })
         }
     }
 }
 
-fn single_ident_path(ident: Ident) -> Path{
-    Path{
-        segments: {
-            let mut punc = Punctuated::new();
-            punc.push(PathSegment::from(ident));
-            punc
-        },
-        leading_colon: None,
-    }
-}
-
-
-#[proc_macro_derive(RmcSerialize, attributes(extends, rmc_struct))]
-pub fn rmc_serialize(input: TokenStream) -> TokenStream {
-    let derive_input = parse_macro_input!(input as DeriveInput);
-
-    let struct_attr = derive_input.attrs.iter()
-        .find(|a| a.path().segments.len() == 1 &&
-            a.path().segments.first().is_some_and(|p| p.ident.to_string() == "rmc_struct"));
-
-    let Data::Struct(s) = derive_input.data else {
-        panic!("rmc struct type MUST be a struct");
-    };
-
-    // generate base data
-
+fn gen_serialize_data_struct(
+    s: DataStruct,
+    struct_attr: Option<&Attribute>,
+) -> (proc_macro2::TokenStream, proc_macro2::TokenStream) {
     let serialize_base_content = {
         let mut serialize_content = quote! {};
 
-        for f in &s.fields{
-            if f.attrs.iter()
-                .any(|a| a.path().segments.len() == 1 &&
-                    a.path().segments.first().is_some_and(|p| p.ident.to_string() == "extends")){
+        for f in &s.fields {
+            if f.attrs.iter().any(|a| {
+                a.path().segments.len() == 1
+                    && a.path()
+                        .segments
+                        .first()
+                        .is_some_and(|p| p.ident.to_string() == "extends")
+            }) {
                 continue;
             }
             let ident = f.ident.as_ref().unwrap();
 
-            serialize_content.append_all(quote!{
+            serialize_content.append_all(quote! {
                 self.#ident.serialize(writer)?;
             })
         }
 
-        quote!{
+        quote! {
             #serialize_content
 
             Ok(())
@@ -135,10 +81,10 @@ pub fn rmc_serialize(input: TokenStream) -> TokenStream {
         for f in &s.fields {
             let ident = f.ident.as_ref().unwrap();
 
-            structure_content.append_all(quote!{#ident, });
+            structure_content.append_all(quote! {#ident, });
         }
 
-        quote!{
+        quote! {
             Ok(Self{
                 #structure_content
             })
@@ -148,22 +94,26 @@ pub fn rmc_serialize(input: TokenStream) -> TokenStream {
     let deserialize_base_content = {
         let mut deserialize_content = quote! {};
 
-        for f in &s.fields{
-            if f.attrs.iter()
-                .any(|a| a.path().segments.len() == 1 &&
-                    a.path().segments.first().is_some_and(|p| p.ident.to_string() == "extends")){
+        for f in &s.fields {
+            if f.attrs.iter().any(|a| {
+                a.path().segments.len() == 1
+                    && a.path()
+                        .segments
+                        .first()
+                        .is_some_and(|p| p.ident.to_string() == "extends")
+            }) {
                 continue;
             }
 
             let ident = f.ident.as_ref().unwrap();
             let ty = &f.ty;
 
-            deserialize_content.append_all(quote!{
+            deserialize_content.append_all(quote! {
                 let #ident = <#ty> :: deserialize(reader)?;
             })
         }
 
-        quote!{
+        quote! {
             #deserialize_content
             #struct_ctor
         }
@@ -171,15 +121,19 @@ pub fn rmc_serialize(input: TokenStream) -> TokenStream {
 
     // generate base with extends stuff
 
-    let serialize_base_content = if let Some(attr) = struct_attr{
+    let serialize_base_content = if let Some(attr) = struct_attr {
         let version: Literal = attr.parse_args().expect("has to be a literal");
 
         let pre_inner = if let Some(f) = s.fields.iter().find(|f| {
-            f.attrs.iter()
-                .any(|a| a.path().segments.len() == 1 &&
-                    a.path().segments.first().is_some_and(|p| p.ident.to_string() == "extends"))
-        }){
-            let ident= f.ident.as_ref().unwrap();
+            f.attrs.iter().any(|a| {
+                a.path().segments.len() == 1
+                    && a.path()
+                        .segments
+                        .first()
+                        .is_some_and(|p| p.ident.to_string() == "extends")
+            })
+        }) {
+            let ident = f.ident.as_ref().unwrap();
             quote! {
                 self.#ident.serialize(writer)?;
             }
@@ -199,16 +153,20 @@ pub fn rmc_serialize(input: TokenStream) -> TokenStream {
         serialize_base_content
     };
 
-    let deserialize_base_content = if let Some(attr) = struct_attr{
+    let deserialize_base_content = if let Some(attr) = struct_attr {
         let version: Literal = attr.parse_args().expect("has to be a literal");
 
         let pre_inner = if let Some(f) = s.fields.iter().find(|f| {
-            f.attrs.iter()
-                .any(|a| a.path().segments.len() == 1 &&
-                    a.path().segments.first().is_some_and(|p| p.ident.to_string() == "extends"))
-        }){
-            let ident= f.ident.as_ref().unwrap();
-            let ty= &f.ty;
+            f.attrs.iter().any(|a| {
+                a.path().segments.len() == 1
+                    && a.path()
+                        .segments
+                        .first()
+                        .is_some_and(|p| p.ident.to_string() == "extends")
+            })
+        }) {
+            let ident = f.ident.as_ref().unwrap();
+            let ty = &f.ty;
             quote! {
                 let #ident = <#ty> :: deserialize(reader)?;
             }
@@ -225,6 +183,183 @@ pub fn rmc_serialize(input: TokenStream) -> TokenStream {
     } else {
         deserialize_base_content
     };
+
+    (serialize_base_content, deserialize_base_content)
+}
+
+#[proc_macro_derive(RmcSerialize, attributes(extends, rmc_struct))]
+pub fn rmc_serialize(input: TokenStream) -> TokenStream {
+    let derive_input = parse_macro_input!(input as DeriveInput);
+
+    let struct_attr = derive_input.attrs.iter().find(|a| {
+        a.path().segments.len() == 1
+            && a.path()
+                .segments
+                .first()
+                .is_some_and(|p| p.ident.to_string() == "rmc_struct")
+    });
+    let repr_attr = derive_input.attrs.iter().find(|a| {
+        a.path().segments.len() == 1
+            && a.path()
+                .segments
+                .first()
+                .is_some_and(|p| p.ident.to_string() == "repr")
+    });
+
+    /*let Data::Struct(s) = derive_input.data else {
+        panic!("rmc struct type MUST be a struct");
+    };*/
+
+    let (serialize_base_content, deserialize_base_content) = match derive_input.data {
+        Data::Struct(s) => gen_serialize_data_struct(s, struct_attr),
+        Data::Enum(e) => {
+            let Some(repr_attr) = repr_attr else {
+                panic!("missing repr attribute");
+            };
+
+            let ty: Ident = repr_attr.parse_args().unwrap();
+
+            let mut inner_match_de = quote! {};
+            let mut inner_match_se = quote! {};
+
+            for variant in e.variants {
+                let Some((_, val)) = variant.discriminant else {
+                    panic!("missing discriminant");
+                };
+
+                let field_data_de = match &variant.fields {
+                    Fields::Named(v) => {
+                        let mut base = quote! {};
+                        for field in v.named.iter() {
+                            let ty = &field.ty;
+                            let name = &field.ident;
+
+                            base.append_all(quote!{
+                                #name: <#ty as rust_nex::rmc::structures::RmcSerialize>::deserialize(reader)?,
+                            });
+                        }
+
+                        quote! {{#base}}
+                    }
+                    Fields::Unnamed(n) => {
+                        let mut base = quote! {};
+
+                        for field in n.unnamed.iter() {
+                            let ty = &field.ty;
+
+                            base.append_all(quote!{
+                                <#ty as rust_nex::rmc::structures::RmcSerialize>::deserialize(reader)?,
+                            });
+                        }
+
+                        quote! {(#base)}
+                    }
+                    Fields::Unit => {
+                        quote! {}
+                    }
+                };
+
+                let mut se_with_fields = quote! {
+                    <#ty as rust_nex::rmc::structures::RmcSerialize>::serialize(&#val, writer)?;
+                };
+
+                match &variant.fields {
+                    Fields::Named(v) => {
+                        for field in v.named.iter() {
+                            let ty = &field.ty;
+                            let name = &field.ident;
+
+                            se_with_fields.append_all(quote!{
+                                <#ty as rust_nex::rmc::structures::RmcSerialize>::serialize(#name ,writer)?;
+                            });
+                        }
+                    }
+                    Fields::Unnamed(n) => {
+                        for (i, field) in n.unnamed.iter().enumerate() {
+                            let ty = &field.ty;
+
+                            let ident = Ident::new(&format!("val_{}", i), Span::call_site());
+
+                            se_with_fields.append_all(quote!{
+                                <#ty as rust_nex::rmc::structures::RmcSerialize>::serialize(#ident, writer)?;
+                            });
+                        }
+                    }
+                    Fields::Unit => {}
+                };
+
+                let field_match_se = match &variant.fields {
+                    Fields::Named(v) => {
+                        let mut base = quote! {};
+
+                        for field in v.named.iter() {
+                            let name = &field.ident;
+
+                            base.append_all(quote! {
+                                #name,
+                            });
+                        }
+
+                        quote! {{#base}}
+                    }
+                    Fields::Unnamed(n) => {
+                        let mut base = quote! {};
+
+                        for (i, _field) in n.unnamed.iter().enumerate() {
+                            let ident = Ident::new(&format!("val_{}", i), Span::call_site());
+
+                            base.append_all(quote! {
+                                #ident,
+                            });
+                        }
+
+                        quote! {(#base)}
+                    }
+                    Fields::Unit => {
+                        quote! {}
+                    }
+                };
+
+                let name = variant.ident;
+
+                inner_match_de.append_all(quote! {
+                    #val => Self::#name #field_data_de,
+                });
+
+                inner_match_se.append_all(quote! {
+                    Self::#name #field_match_se => {
+                        #se_with_fields
+                    },
+                });
+            }
+
+            let serialize_base_content = quote! {
+                match self{
+                    #inner_match_se
+                };
+
+
+
+                Ok(())
+            };
+
+            let deserialize_base_content = quote! {
+                let val: Self = match <#ty as rust_nex::rmc::structures::RmcSerialize>::deserialize(reader)?{
+                    #inner_match_de
+                    v => return Err(rust_nex::rmc::structures::Error::UnexpectedValue(v as _))
+                };
+
+                Ok(val)
+            };
+
+            (serialize_base_content, deserialize_base_content)
+        }
+        Data::Union(_) => {
+            unimplemented!()
+        }
+    };
+
+    // generate base data
 
     let ident = derive_input.ident;
 
@@ -255,7 +390,7 @@ pub fn rmc_serialize(input: TokenStream) -> TokenStream {
 /// [`macro@method_id`] attribute.
 ///
 /// You can also specify to have the protocol to be non-returning by adding a second parameter to
-/// the attribute which is just `NoReturn` e.g. ` #[rmc_proto(1, NoReturn)]`
+/// the attribute which is just `NoReturn` e.g. `#[rmc_proto(1, NoReturn)]`
 ///
 /// Example
 /// ```
@@ -270,34 +405,39 @@ pub fn rmc_serialize(input: TokenStream) -> TokenStream {
 /// }
 /// ```
 #[proc_macro_attribute]
-pub fn rmc_proto(attr: TokenStream, input: TokenStream) -> TokenStream{
+pub fn rmc_proto(attr: TokenStream, input: TokenStream) -> TokenStream {
+    let params = parse_macro_input!(attr as ProtoInputParams);
 
-    let mut params = parse_macro_input!(attr as ProtoInputParams);
-
-    let ProtoInputParams{
+    let ProtoInputParams {
         proto_num,
-        properties
+        properties,
     } = params;
 
-    let no_return_data = properties.is_some_and(|p| p.1.iter().any(|i|{
-        i.to_string() == "NoReturn"
-    }));
+    let no_return_data =
+        properties.is_some_and(|p| p.1.iter().any(|i| i.to_string() == "NoReturn"));
 
-    let mut input = parse_macro_input!(input as syn::ItemTrait);
+    let input = parse_macro_input!(input as syn::ItemTrait);
 
     // gigantic ass struct initializer (to summarize this gets all of the data)
-    let raw_data = RmcProtocolData{
+    let raw_data = RmcProtocolData {
         has_returns: !no_return_data,
         name: input.ident.clone(),
         id: proto_num,
         methods: input
             .items
             .iter()
-            .filter_map(|v| match v{ TraitItem::Fn(v) => Some(v), _ => None })
-            .map(|func|{
-                let Some(attr) = func.attrs.iter()
-                    .find(|a| a.path().segments.last().is_some_and(|s| s.ident.to_string() == "method_id")) else {
-                    panic!( "every function inside of an rmc protocol must have a method id");
+            .filter_map(|v| match v {
+                TraitItem::Fn(v) => Some(v),
+                _ => None,
+            })
+            .map(|func| {
+                let Some(attr) = func.attrs.iter().find(|a| {
+                    a.path()
+                        .segments
+                        .last()
+                        .is_some_and(|s| s.ident.to_string() == "method_id")
+                }) else {
+                    panic!("every function inside of an rmc protocol must have a method id");
                 };
 
                 let Ok(id): Result<LitInt, _> = attr.parse_args() else {
@@ -314,26 +454,30 @@ pub fn rmc_proto(attr: TokenStream, input: TokenStream) -> TokenStream{
                             panic!("what");
                         };
                         let Pat::Ident(i) = &*t.pat else {
-                            panic!("unable to handle non identifier patterns as parameter bindings");
+                            panic!(
+                                "unable to handle non identifier patterns as parameter bindings"
+                            );
                         };
 
                         (i.ident.clone(), t.ty.as_ref().clone())
-                    }).collect();
+                    })
+                    .collect();
 
-                ProtoMethodData{
+                ProtoMethodData {
                     id,
                     name: func.sig.ident.clone(),
                     parameters: funcs,
-                    ret_val: func.sig.output.clone()
+                    ret_val: func.sig.output.clone(),
                 }
-            }).collect()
-
+            })
+            .collect(),
     };
 
-    quote!{
+    quote! {
         #input
         #raw_data
-    }.into()
+    }
+    .into()
 }
 
 /// Used to specify the method id of methods when making rmc protocols.
@@ -342,25 +486,25 @@ pub fn rmc_proto(attr: TokenStream, input: TokenStream) -> TokenStream{
 /// Note: This attribute doesn't do anything by itself and just returns the thing it was attached to
 /// unchanged.
 #[proc_macro_attribute]
-pub fn method_id(_attr: TokenStream, input: TokenStream) -> TokenStream{
+pub fn method_id(_attr: TokenStream, input: TokenStream) -> TokenStream {
     // this attribute doesnt do anything by itself, see `rmc_proto`
     input
 }
 
-
-
 #[proc_macro_attribute]
-pub fn rmc_struct(attr: TokenStream, input: TokenStream) -> TokenStream{
-    let mut type_data = parse_macro_input!(input as DeriveInput);
+pub fn rmc_struct(attr: TokenStream, input: TokenStream) -> TokenStream {
+    let type_data = parse_macro_input!(input as DeriveInput);
     let mut ident = parse_macro_input!(attr as syn::Path);
     let last_token = ident.segments.last_mut().expect("empty path?");
 
-    last_token.ident = Ident::new(&("Local".to_owned() + &last_token.ident.to_string()), last_token.span());
-
+    last_token.ident = Ident::new(
+        &("Local".to_owned() + &last_token.ident.to_string()),
+        last_token.span(),
+    );
 
     let struct_name = &type_data.ident;
 
-    let out = quote!{
+    let out = quote! {
         #type_data
 
         impl #ident for #struct_name{
@@ -378,7 +522,7 @@ pub fn rmc_struct(attr: TokenStream, input: TokenStream) -> TokenStream{
 }
 
 #[proc_macro_attribute]
-pub fn connection(_attr: TokenStream, input: TokenStream) -> TokenStream{
+pub fn connection(_attr: TokenStream, input: TokenStream) -> TokenStream {
     // this attribute doesnt do anything by itself, see `rmc_struct`
     input
 }

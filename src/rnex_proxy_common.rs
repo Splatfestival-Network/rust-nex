@@ -1,5 +1,4 @@
 use macros::RmcSerialize;
-use crate::kerberos::KerberosDateTime;
 use crate::prudp::sockaddr::PRUDPSockAddr;
 
 #[derive(Debug, RmcSerialize)]

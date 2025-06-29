@@ -8,12 +8,14 @@ use log::{error, info};
 use tokio::net::TcpListener;
 use tokio::task;
 use rust_nex::common::setup;
-use rust_nex::executables::common::{OWN_IP_PRIVATE, SERVER_PORT};
+use rust_nex::executables::common::{RemoteController, RemoteControllerManagement, OWN_IP_PRIVATE, SERVER_PORT};
+use rust_nex::executables::common::ServerCluster::Secure;
+use rust_nex::executables::common::ServerType::Backend;
 use rust_nex::nex::matchmake::MatchmakeManager;
 use rust_nex::nex::remote_console::RemoteConsole;
 use rust_nex::nex::user::User;
 use rust_nex::reggie::get_configured_tls_acceptor;
-use rust_nex::rmc::protocols::new_rmc_gateway_connection;
+use rust_nex::rmc::protocols::{new_rmc_gateway_connection, OnlyRemote};
 use rust_nex::rnex_proxy_common::ConnectionInitData;
 use rust_nex::rmc::protocols::RemoteInstantiatable;
 
@@ -21,6 +23,16 @@ use rust_nex::rmc::protocols::RemoteInstantiatable;
 #[tokio::main]
 async fn main() {
     setup();
+
+    let conn = rust_nex::reggie::rmc_connect_to(
+        "agmp-control.spfn.net",
+        Backend{
+            name: "agmp-secure-1.spfn.net".to_string(),
+            cluster: Secure
+        },
+        |r| Arc::new(OnlyRemote::<RemoteController>::new(r))
+    ).await;
+    let conn = conn.unwrap();
 
     let acceptor = get_configured_tls_acceptor().await;
 
