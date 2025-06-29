@@ -1,6 +1,4 @@
-use crate::executables::common::RemoteControllerManagement;
 use std::sync::Arc;
-use rust_nex::executables::common::RemoteController;
 use crate::grpc::account;
 use crate::kerberos::{derive_key, KerberosDateTime, Ticket};
 use crate::nex::account::Account;
@@ -12,6 +10,7 @@ use crate::rmc::structures::connection_data::ConnectionData;
 use crate::rmc::structures::qresult::QResult;
 use crate::{define_rmc_proto, kerberos};
 use macros::rmc_struct;
+use crate::reggie::{RemoteController, RemoteControllerManagement};
 use crate::rmc::protocols::OnlyRemote;
 
 define_rmc_proto!(
