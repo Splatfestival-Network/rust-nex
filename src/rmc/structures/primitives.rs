@@ -230,3 +230,12 @@ impl<T: RmcSerialize, U: RmcSerialize, V: RmcSerialize, W: RmcSerialize, X: RmcS
         Ok((first, second, third, fourth, fifth, sixth, seventh))
     }
 }
+
+impl<T: RmcSerialize> RmcSerialize for Box<T>{
+    fn serialize(&self, writer: &mut dyn Write) -> crate::rmc::structures::Result<()> {
+        self.as_ref().serialize(writer)
+    }
+    fn deserialize(reader: &mut dyn Read) -> crate::rmc::structures::Result<Self> {
+        T::deserialize(reader).map(Box::new)
+    }
+}

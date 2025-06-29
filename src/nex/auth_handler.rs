@@ -1,3 +1,6 @@
+use crate::executables::common::RemoteControllerManagement;
+use std::sync::Arc;
+use rust_nex::executables::common::RemoteController;
 use crate::grpc::account;
 use crate::kerberos::{derive_key, KerberosDateTime, Ticket};
 use crate::nex::account::Account;
@@ -7,9 +10,9 @@ use crate::rmc::response::ErrorCode::Core_Unknown;
 use crate::rmc::structures::any::Any;
 use crate::rmc::structures::connection_data::ConnectionData;
 use crate::rmc::structures::qresult::QResult;
-use crate::rmc::structures::RmcSerialize;
-use crate::{define_rmc_proto, kerberos, rmc};
+use crate::{define_rmc_proto, kerberos};
 use macros::rmc_struct;
+use crate::rmc::protocols::OnlyRemote;
 
 define_rmc_proto!(
     proto AuthClientProtocol{
@@ -21,7 +24,8 @@ define_rmc_proto!(
 pub struct AuthHandler {
     pub destination_server_acct: &'static Account,
     pub build_name: &'static str,
-    pub station_url: &'static str,
+    //pub station_url: &'static str,
+    pub control_server: Arc<OnlyRemote<RemoteController>>,
 }
 
 pub fn generate_ticket(
@@ -56,14 +60,14 @@ async fn get_login_data_by_pid(pid: u32) -> Option<(u32, [u8; 16])> {
 }
 
 impl Auth for AuthHandler {
-    async fn login(&self, name: String) -> Result<(), ErrorCode> {
+    async fn login(&self, _name: String) -> Result<(), ErrorCode> {
         todo!()
     }
 
     async fn login_ex(
         &self,
         name: String,
-        extra_data: Any,
+        _extra_data: Any,
     ) -> Result<(QResult, u32, Vec<u8>, ConnectionData, String), ErrorCode> {
         let Ok(pid) = name.parse() else {
             return Err(ErrorCode::Core_InvalidArgument);
@@ -83,9 +87,13 @@ impl Auth for AuthHandler {
         let ticket = generate_ticket(source_login_data, destination_login_data);
 
         let result = QResult::success(Core_Unknown);
+        
+        let Ok(addr) = self.control_server.get_secure_proxy_url().await else {
+            return Err(ErrorCode::Core_Exception);
+        };
 
         let connection_data = ConnectionData {
-            station_url: self.station_url.to_string(),
+            station_url: addr,
             special_station_url: "".to_string(),
             //date_time: KerberosDateTime::new(1,1,1,1,1,1),
             date_time: KerberosDateTime::now(),
@@ -126,11 +134,11 @@ impl Auth for AuthHandler {
         Ok((result, ticket.into()))
     }
 
-    async fn get_pid(&self, username: String) -> Result<u32, ErrorCode> {
+    async fn get_pid(&self, _username: String) -> Result<u32, ErrorCode> {
         Err(ErrorCode::Core_Exception)
     }
 
-    async fn get_name(&self, pid: u32) -> Result<String, ErrorCode> {
+    async fn get_name(&self, _pid: u32) -> Result<String, ErrorCode> {
         Err(ErrorCode::Core_Exception)
     }
 }

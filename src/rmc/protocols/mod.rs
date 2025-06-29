@@ -10,28 +10,21 @@ pub mod matchmake_ext;
 pub mod ranking;
 
 use crate::util::{SendingBufferConnection, SplittableBufferConnection};
-use crate::prudp::socket::{ExternalConnection, SendingConnection};
 use crate::rmc::message::RMCMessage;
 use crate::rmc::protocols::RemoteCallError::ConnectionBroke;
 use crate::rmc::response::{ErrorCode, RMCResponse, RMCResponseResult};
 use crate::rmc::structures;
-use crate::rmc::structures::connection_data::ConnectionData;
-use crate::rmc::structures::matchmake::AutoMatchmakeParam;
-use crate::rmc::structures::{Error, RmcSerialize};
-use async_trait::async_trait;
-use chrono::TimeDelta;
+use crate::rmc::structures::RmcSerialize;
 use log::{error, info};
-use macros::method_id;
-use macros::{rmc_proto, rmc_struct};
-use paste::paste;
 use std::collections::HashMap;
+use std::future::Future;
 use std::io::Cursor;
-use std::ops::{Add, Deref};
-use std::sync::{Arc, Condvar};
+use std::ops::Deref;
+use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::{Mutex, Notify};
-use tokio::time::{sleep_until, Instant};
+use tokio::time::{sleep, sleep_until, Instant};
 use crate::result::ResultExtension;
 
 #[derive(Error, Debug)]
@@ -73,6 +66,10 @@ impl RmcConnection {
         self.0.send(message_data).await.ok_or(ConnectionBroke)?;
 
         Ok(())
+    }
+
+    pub async fn disconnect(&self){
+        self.0.disconnect().await;
     }
 }
 
@@ -173,6 +170,9 @@ macro_rules! define_rmc_proto {
                 fn new(conn: rust_nex::rmc::protocols::RmcConnection) -> Self{
                     Self(conn)
                 }
+                async fn disconnect(&self){
+                    self.0.disconnect().await;
+                }
             }
 
             impl rust_nex::rmc::protocols::HasRmcConnection for [<Remote $name>]{
@@ -192,11 +192,11 @@ macro_rules! define_rmc_proto {
 impl RmcCallable for () {
     async fn rmc_call(
         &self,
-        remote_response_connection: &SendingBufferConnection,
-        protocol_id: u16,
-        method_id: u32,
-        call_id: u32,
-        rest: Vec<u8>,
+        _remote_response_connection: &SendingBufferConnection,
+        _protocol_id: u16,
+        _method_id: u32,
+        _call_id: u32,
+        _rest: Vec<u8>,
     ) {
         //todo: maybe reply with not implemented(?)
     }
@@ -204,6 +204,7 @@ impl RmcCallable for () {
 
 pub trait RemoteInstantiatable{
     fn new(conn: RmcConnection) -> Self;
+    async fn disconnect(&self);
 }
 
 pub struct OnlyRemote<T: RemoteInstantiatable>(T);
@@ -220,10 +221,15 @@ impl<T: RemoteInstantiatable> OnlyRemote<T>{
     pub fn new(conn: RmcConnection) -> Self{
         Self(T::new(conn))
     }
+
+    pub async fn disconnect(&self) {
+        self.0.disconnect().await;
+    }
 }
 
 impl<T: RemoteInstantiatable> RmcCallable for OnlyRemote<T>{
-    fn rmc_call(&self, responder: &SendingBufferConnection, protocol_id: u16, method_id: u32, call_id: u32, rest: Vec<u8>) -> impl std::future::Future<Output = ()> + Send {
+    fn rmc_call(&self, _responder: &SendingBufferConnection, _protocol_id: u16, _method_id: u32, _call_id: u32, _rest: Vec<u8>) -> impl Future<Output = ()> + Send {
+        // maybe respond with not implemented or something
         async{}
     }
 }
@@ -242,6 +248,12 @@ async fn handle_incoming<T: RmcCallable + Send + Sync + 'static>(
             error!("ending rmc gateway.");
             return
         };
+
+        // protocol 0 is hardcoded to be the no protocol protocol aka keepalive protocol
+        if *proto_id == 0{
+            println!("got keepalive");
+            continue;
+        }
 
         if (proto_id & 0x80) == 0{
             let Some(response) = RMCResponse::new(&mut Cursor::new(v)).display_err_or_some() else {
@@ -292,6 +304,8 @@ where
 
     let rmc_conn = RmcConnection(sending_conn, response_recv);
 
+    let sending_conn = conn.duplicate_sender();
+
     let exposed_object = (create_internal)(rmc_conn);
 
     {
@@ -304,7 +318,25 @@ where
                 incoming
             ).await;
         });
+
+
+        tokio::spawn(async move {
+            while sending_conn.is_alive(){
+                sending_conn.send([0,0,0,0,0].to_vec()).await;
+                sleep(Duration::from_secs(10)).await;
+            }
+        });
     }
 
     exposed_object
+}
+
+impl<T: RmcCallable> RmcCallable for Arc<T>{
+    fn rmc_call(&self, responder: &SendingBufferConnection, protocol_id: u16, method_id: u32, call_id: u32, rest: Vec<u8>) -> impl Future<Output=()> + Send {
+        self.as_ref().rmc_call(responder, protocol_id, method_id, call_id, rest)
+    }
+}
+
+define_rmc_proto! {
+    proto NoProto{}
 }

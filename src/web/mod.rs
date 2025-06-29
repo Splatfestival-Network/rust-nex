@@ -1,15 +1,10 @@
-use std::net::SocketAddrV4;
 use std::sync::Arc;
 use async_trait::async_trait;
-use once_cell::sync::Lazy;
-use rocket::{get, routes, Request, Rocket, State};
+use rocket::{get, routes, Request, State};
 use rocket::request::{FromRequest, Outcome};
 use rocket::serde::json::Json;
 use tokio::task::JoinHandle;
-use serde::Serialize;
-use tokio::sync::Mutex;
 use crate::nex::matchmake::MatchmakeManager;
-use crate::rmc::protocols::HasRmcConnection;
 use crate::rmc::protocols::notifications::NotificationEvent;
 
 struct RnexApiAuth;

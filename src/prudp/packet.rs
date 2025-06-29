@@ -9,7 +9,7 @@ use std::io::{Cursor, Read, Seek, Write};
 use std::net::SocketAddrV4;
 use bytemuck::{Pod, Zeroable};
 use hmac::{Hmac, Mac};
-use log::{error, trace, warn};
+use log::{error, warn};
 use md5::{Md5, Digest};
 use thiserror::Error;
 use v_byte_macros::{SwapEndian};

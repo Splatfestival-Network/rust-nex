@@ -1,42 +1,64 @@
-
-
-use std::env;
-use std::ffi::CStr;
-use std::io::{Read, Write};
-use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
-use bytemuck::{Pod, Zeroable};
-use chacha20::{ChaCha20, Key};
-use chacha20::cipher::{Iv, KeyIvInit, StreamCipher};
-use log::error;
-use once_cell::sync::Lazy;
-use rsa::pkcs8::{DecodePrivateKey, DecodePublicKey, Document};
-use rsa::{BigUint, Pkcs1v15Encrypt, RsaPrivateKey, RsaPublicKey};
-use rsa::pkcs1::EncodeRsaPublicKey;
-use rsa::pss::BlindedSigningKey;
-use rsa::signature::{RandomizedSigner, SignatureEncoding};
-use sha2::Sha256;
-use tokio::net::TcpSocket;
+use std::net::SocketAddrV4;
+use std::sync::Arc;
+use std::time::Duration;
+use futures::future::Remote;
+use log::{error, warn};
+use macros::rmc_struct;
+use tokio::sync::RwLock;
 use tokio::task;
+use tokio::time::sleep;
 use rust_nex::common::setup;
-use rust_nex::executables::common::{OWN_IP_PRIVATE, SECURE_SERVER_ACCOUNT, SERVER_PORT};
+use rust_nex::executables::common::{ProxyManagement, RemoteController, RemoteControllerManagement, OWN_IP_PRIVATE, OWN_IP_PUBLIC, SECURE_SERVER_ACCOUNT, SERVER_PORT};
+use rust_nex::executables::common::ServerCluster::Auth;
+use rust_nex::executables::common::ServerType::Proxy;
 use rust_nex::prudp::packet::VirtualPort;
 use rust_nex::prudp::router::Router;
 use rust_nex::prudp::secure::Secure;
 use rust_nex::prudp::unsecure::Unsecure;
-use rust_nex::reggie::{establish_tls_connection_to, UnitPacketRead, UnitPacketWrite};
-use rust_nex::rmc::structures::RmcSerialize;
+use rust_nex::reggie::establish_tls_connection_to;
+use rust_nex::rmc::response::ErrorCode;
 use rust_nex::rnex_proxy_common::ConnectionInitData;
+use rust_nex::executables::common::LocalProxy;
+use rust_nex::reggie::UnitPacketWrite;
+use rust_nex::rmc::structures::RmcSerialize;
+use rust_nex::reggie::UnitPacketRead;
+use rust_nex::rmc::protocols::RemoteInstantiatable;
 
+#[rmc_struct(Proxy)]
+struct DestinationHolder{
+    url: RwLock<String>,
+    controller: RemoteController
+}
 
+impl ProxyManagement for DestinationHolder{
+    async fn update_url(&self, new_url: String) -> Result<(), ErrorCode> {
+        let mut url = self.url.write().await;
 
-static FORWARD_DESTINATION: Lazy<String> =
-    Lazy::new(|| env::var("FORWARD_DESTINATION").expect("no forward destination given"));
-static FORWARD_DESTINATION_NAME: Lazy<String> =
-    Lazy::new(|| env::var("FORWARD_DESTINATION_NAME").expect("no forward destination name given"));
+        *url = new_url;
+
+        Ok(())
+    }
+}
+
 
 #[tokio::main]
 async fn main() {
     setup();
+
+    let conn =
+        rust_nex::reggie::rmc_connect_to(
+            "agmp-control.spfn.net",
+            Proxy {
+                addr: SocketAddrV4::new(*OWN_IP_PUBLIC, *SERVER_PORT),
+                cluster: Auth
+            },
+            |r| Arc::new(DestinationHolder{
+                url: Default::default(),
+                controller: RemoteController::new(r)
+            })
+        ).await;
+    let dest_holder = conn.unwrap();
+
 
     let (router_secure, _) = Router::new(SocketAddrV4::new(*OWN_IP_PRIVATE, *SERVER_PORT))
         .await
@@ -45,7 +67,7 @@ async fn main() {
     let mut socket_secure = router_secure
         .add_socket(VirtualPort::new(1, 10), Secure(
             "6f599f81",
-            &SECURE_SERVER_ACCOUNT
+            dest_holder.controller.get_secure_account().await.unwrap()
         ))
         .await
         .expect("unable to add socket");
@@ -58,9 +80,18 @@ async fn main() {
             return;
         };
 
+        let dest_holder = dest_holder.clone();
+
         task::spawn(async move {
+            let dest = dest_holder.url.read().await;
+
+            if *dest == ""{
+                warn!("no destination set yet but connection attempted");
+                return;
+            }
+
             let mut stream
-                = establish_tls_connection_to(FORWARD_DESTINATION.as_str(), FORWARD_DESTINATION_NAME.as_str()).await;
+                = establish_tls_connection_to(&dest, &dest).await;
 
             if let Err(e) = stream.send_buffer(&ConnectionInitData{
                 prudpsock_addr: conn.socket_addr,
@@ -69,6 +100,8 @@ async fn main() {
                 error!("error connecting to backend: {}", e);
                 return;
             };
+
+
 
             loop {
                 tokio::select! {
@@ -95,6 +128,9 @@ async fn main() {
                             return;
                         }
                     },
+                    _ = sleep(Duration::from_secs(10)) => {
+                        conn.send([0,0,0,0,0].to_vec()).await;
+                    }
                 }
             }
         });

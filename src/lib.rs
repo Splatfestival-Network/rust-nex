@@ -1,3 +1,11 @@
+#![allow(dead_code)]
+// rnex makes extensive use of async functions in public traits
+// this is however fine because these traits should never(and i mean NEVER) be used dynamically
+#![allow(async_fn_in_trait)]
+//#![warn(missing_docs)]
+
+
+
 extern crate self as rust_nex;
 
 pub mod endianness;

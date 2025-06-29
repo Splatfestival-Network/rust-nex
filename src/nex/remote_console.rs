@@ -1,8 +1,6 @@
-use macros::rmc_struct;
-use crate::rmc::protocols::notifications::{Notification, NotificationEvent, RawNotification, RawNotificationInfo, RemoteNotification};
+use crate::rmc::protocols::notifications::{Notification, RawNotification, RawNotificationInfo, RemoteNotification};
 use crate::rmc::protocols::nat_traversal::{NatTraversalConsole, RemoteNatTraversalConsole, RawNatTraversalConsoleInfo, RawNatTraversalConsole};
 use crate::define_rmc_proto;
-use crate::nex::user::RemoteUserProtocol;
 
 define_rmc_proto!(
     proto Console{

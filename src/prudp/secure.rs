@@ -10,7 +10,6 @@ use crate::kerberos::{derive_key, TicketInternalData};
 use crate::nex::account::Account;
 use crate::prudp::packet::PRUDPV1Packet;
 use crate::prudp::socket::{CryptoHandler, CryptoHandlerConnectionInstance, EncryptionPair};
-use crate::prudp::unsecure::UnsecureInstance;
 use crate::rmc::structures::RmcSerialize;
 
 pub fn read_secure_connection_data(data: &[u8], act: &Account) -> Option<([u8; 32], u32, u32)>{
@@ -103,7 +102,7 @@ pub fn generate_secure_encryption_pairs(mut session_key: [u8; 32], count: u8) ->
 }
 
 
-pub struct Secure(pub &'static str, pub &'static Account);
+pub struct Secure(pub &'static str, pub Account);
 
 
 pub struct SecureInstance {
@@ -186,7 +185,7 @@ impl CryptoHandlerConnectionInstance for SecureInstance {
         packet.calculate_and_assign_signature(self.access_key, Some(self.session_key), Some(self.self_signature));
     }
 
-    fn verify_packet(&self, packet: &PRUDPV1Packet) -> bool {
+    fn verify_packet(&self, _packet: &PRUDPV1Packet) -> bool {
         true
     }
 }

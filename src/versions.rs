@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 use std::ops::{BitAnd, BitOr};
-use typenum::{Cmp, IsEqual, IsLess, IsLessOrEqual, Unsigned, U1, U2, U3};
+use typenum::{Cmp, IsEqual, IsLess, IsLessOrEqual, Unsigned};
 
 /// This trait represents a version at compile time
 trait Version{

@@ -1,3 +1,7 @@
+// i seriously dont know why the compiler is complaining about unused parentheses in the repr
+// attributes but this gets it to not complain anymore
+#![allow(unused_parens)]
+
 use std::io;
 use std::io::{Read, Seek, Write};
 use std::mem::transmute;
@@ -5,14 +9,8 @@ use bytemuck::bytes_of;
 use log::error;
 use v_byte_macros::EnumTryInto;
 use crate::endianness::{ReadExtensions, IS_BIG_ENDIAN};
-use crate::prudp::packet::{PRUDPV1Packet};
-use crate::prudp::packet::flags::{NEED_ACK, RELIABLE};
-use crate::prudp::packet::PacketOption::FragmentId;
-use crate::prudp::packet::types::DATA;
-use crate::prudp::socket::{ExternalConnection, SendingConnection};
 use crate::rmc::response::ErrorCode::Core_Exception;
 use crate::rmc::structures::qresult::ERROR_MASK;
-use crate::rmc::structures::RmcSerialize;
 use crate::util::SendingBufferConnection;
 
 pub enum RMCResponseResult {
@@ -72,7 +70,7 @@ impl RMCResponse {
                 error_code: {
                     match ErrorCode::try_from(error_code){
                         Ok(v) => v,
-                        Err(e) => {
+                        Err(()) => {
                             error!("invalid error code {:#010x}", error_code);
                             Core_Exception
                         }

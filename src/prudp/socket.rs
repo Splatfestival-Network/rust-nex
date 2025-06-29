@@ -1,37 +1,24 @@
-use crate::nex::account::Account;
 use crate::prudp::packet::flags::{ACK, HAS_SIZE, MULTI_ACK, NEED_ACK, RELIABLE};
 use crate::prudp::packet::types::{CONNECT, DATA, DISCONNECT, PING, SYN};
 use crate::prudp::packet::PacketOption::{
-    ConnectionSignature, FragmentId, InitialSequenceId, MaximumSubstreamId, SupportedFunctions,
+    ConnectionSignature, FragmentId, MaximumSubstreamId, SupportedFunctions,
 };
-use crate::prudp::packet::{PRUDPV1Header, PRUDPV1Packet, PacketOption, TypesFlags, VirtualPort};
-use crate::prudp::router::{Error, Router};
+use crate::prudp::packet::{PRUDPV1Header, PRUDPV1Packet, TypesFlags, VirtualPort};
 use crate::prudp::sockaddr::PRUDPSockAddr;
 use async_trait::async_trait;
-use chrono::NaiveTime;
-use hmac::digest::consts::U5;
 use log::info;
-use log::{error, trace, warn};
-use once_cell::sync::Lazy;
-use rand::random;
-use rc4::{Key, KeyInit, Rc4, StreamCipher};
-use rocket::http::hyper::body::HttpBody;
-use std::collections::{BTreeMap, HashMap, VecDeque};
-use std::fmt::{Debug, Formatter};
-use std::future::Future;
+use log::error;
+use rc4::StreamCipher;
+use std::collections::{BTreeMap, HashMap};
 use std::marker::PhantomData;
-use std::mem;
-use std::net::SocketAddrV4;
 use std::ops::Deref;
-use std::pin::Pin;
 use std::sync::{Arc, Weak};
 
 use std::time::Duration;
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::Mutex;
 use tokio::time::{sleep, Instant};
-use tokio_stream::Stream;
 // due to the way this is designed crashing the router thread causes deadlock, sorry ;-;
 // (maybe i will fix that some day)
 
@@ -479,7 +466,7 @@ impl<T: CryptoHandler> InternalSocket<T> {
         self.send_packet_unbuffered(address, response).await;
     }
 
-    async fn handle_data(&self, address: PRUDPSockAddr, mut packet: PRUDPV1Packet) {
+    async fn handle_data(&self, address: PRUDPSockAddr, packet: PRUDPV1Packet) {
         info!("got data");
 
         if packet.header.types_and_flags.get_flags() & (NEED_ACK | RELIABLE)
@@ -533,7 +520,7 @@ impl<T: CryptoHandler> InternalSocket<T> {
         let conn = conn.clone();
         drop(connections);
 
-        let mut conn = conn.lock().await;
+        let conn = conn.lock().await;
 
         let mut response = packet.base_acknowledgement_packet();
         response.header.types_and_flags.set_flag(HAS_SIZE | ACK);
@@ -553,7 +540,7 @@ impl<T: CryptoHandler> InternalSocket<T> {
         let conn = conn.clone();
         drop(connections);
 
-        let mut conn = conn.lock().await;
+        let conn = conn.lock().await;
 
         let mut response = packet.base_acknowledgement_packet();
         response.header.types_and_flags.set_flag(HAS_SIZE | ACK);

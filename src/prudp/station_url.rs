@@ -2,7 +2,6 @@ use std::net::Ipv4Addr;
 use log::error;
 use std::fmt::{Debug, Display, Formatter, Write};
 use std::io::Read;
-use rocket::delete;
 use crate::prudp::station_url::Type::{PRUDP, PRUDPS, UDP};
 use crate::prudp::station_url::UrlOptions::{Address, ConnectionID, NatFiltering, NatMapping, NatType, Platform, PMP, Port, PrincipalID, RVConnectionID, StreamID, StreamType, UPNP, PID};
 use crate::rmc::structures::Error::StationUrlInvalid;

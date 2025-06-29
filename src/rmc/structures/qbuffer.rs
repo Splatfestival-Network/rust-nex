@@ -2,7 +2,6 @@ use std::io::{Read, Write};
 use bytemuck::bytes_of;
 use crate::endianness::{IS_BIG_ENDIAN, ReadExtensions};
 use crate::rmc::structures::{Result, RmcSerialize};
-use crate::rmc::structures::qresult::QResult;
 
 
 #[derive(Debug)]

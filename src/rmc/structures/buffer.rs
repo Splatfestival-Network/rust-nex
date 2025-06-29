@@ -18,7 +18,7 @@ impl<'a> RmcSerialize for &'a [u8]{
     }
 }
 
-impl<'a> RmcSerialize for Box<[u8]>{
+impl RmcSerialize for Box<[u8]>{
     fn serialize(&self, writer: &mut dyn Write) -> crate::rmc::structures::Result<()> {
         (&self[..]).serialize(writer)
     }

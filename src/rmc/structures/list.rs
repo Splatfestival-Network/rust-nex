@@ -1,5 +1,8 @@
+use std::array::from_fn;
 use std::io::{Read, Write};
+use std::mem::MaybeUninit;
 use bytemuck::bytes_of;
+use serde::Serialize;
 use crate::endianness::{IS_BIG_ENDIAN, ReadExtensions};
 use crate::rmc::structures::RmcSerialize;
 
@@ -29,5 +32,29 @@ impl<T: RmcSerialize> RmcSerialize for Vec<T>{
         }
 
         Ok(vec)
+    }
+}
+
+impl<const LEN: usize, T: RmcSerialize> RmcSerialize for [T; LEN]{
+    fn serialize(&self, writer: &mut dyn Write) -> crate::rmc::structures::Result<()> {
+        for i in 0..LEN{
+            self[i].serialize(writer)?;
+        }
+
+        Ok(())
+    }
+
+    fn deserialize(reader: &mut dyn Read) -> crate::rmc::structures::Result<Self> {
+        let mut arr = [const { MaybeUninit::<T>::uninit() }; LEN];
+
+        for i in 0..LEN{
+            arr[i] = MaybeUninit::new(T::deserialize(reader)?);
+        }
+
+        // all of the elements are now initialized so it is safe to assume they are initialized
+
+        let arr = arr.map(|v| unsafe{ v.assume_init() });
+
+        Ok(arr)
     }
 }

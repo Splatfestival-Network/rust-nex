@@ -1,23 +1,12 @@
 use std::{env, result};
 use std::array::TryFromSliceError;
-use std::net::{Ipv4Addr};
 use std::str::FromStr;
 use json::{object, JsonValue};
 use once_cell::sync::Lazy;
 use reqwest::{Body, Method, Url};
 use reqwest::header::HeaderValue;
-use rocket::serde::json::Json;
-use serde::Serialize;
 use thiserror::Error;
-use tonic::metadata::{Ascii, MetadataValue};
-use tonic::{Request, transport};
-use tonic::codegen::InterceptedService;
-use tonic::transport::Channel;
 use crate::grpc::account::Error::SomethingHappened;
-use crate::grpc::InterceptorFunc;
-use crate::grpc::protobufs::account::account_client::AccountClient;
-use crate::grpc::protobufs::account::{GetNexPasswordRequest, GetUserDataRequest, GetUserDataResponse};
-
 static API_KEY: Lazy<String> = Lazy::new(||{
     let key = env::var("ACCOUNT_GQL_API_KEY")
         .expect("no graphql ip specified");

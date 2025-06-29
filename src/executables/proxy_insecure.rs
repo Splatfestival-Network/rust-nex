@@ -1,13 +1,17 @@
 
 
+use rust_nex::executables::common::{LocalProxy, ProxyManagement, RemoteController, OWN_IP_PUBLIC};
 use std::env;
 use std::ffi::CStr;
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
+use std::sync::{Arc, OnceLock};
+use std::time::Duration;
 use bytemuck::{Pod, Zeroable};
 use chacha20::{ChaCha20, Key};
 use chacha20::cipher::{Iv, KeyIvInit, StreamCipher};
-use log::error;
+use log::{error, warn};
+use macros::rmc_struct;
 use once_cell::sync::Lazy;
 use rsa::pkcs8::{DecodePrivateKey, DecodePublicKey, Document};
 use rsa::{BigUint, Pkcs1v15Encrypt, RsaPrivateKey, RsaPublicKey};
@@ -16,13 +20,20 @@ use rsa::pss::BlindedSigningKey;
 use rsa::signature::{RandomizedSigner, SignatureEncoding};
 use sha2::Sha256;
 use tokio::net::TcpSocket;
+use tokio::sync::RwLock;
 use tokio::task;
+use tokio::time::sleep;
 use rust_nex::common::setup;
 use rust_nex::executables::common::{OWN_IP_PRIVATE, SERVER_PORT};
+use rust_nex::executables::common::ServerCluster::Auth;
+use rust_nex::executables::common::ServerType::{Backend, Proxy};
 use rust_nex::prudp::packet::VirtualPort;
 use rust_nex::prudp::router::Router;
+use rust_nex::prudp::station_url::StationUrl;
 use rust_nex::prudp::unsecure::Unsecure;
 use rust_nex::reggie::{establish_tls_connection_to, UnitPacketRead, UnitPacketWrite};
+use rust_nex::rmc::protocols::OnlyRemote;
+use rust_nex::rmc::response::ErrorCode;
 use rust_nex::rmc::structures::RmcSerialize;
 use rust_nex::rnex_proxy_common::ConnectionInitData;
 
@@ -33,29 +44,40 @@ static FORWARD_DESTINATION: Lazy<String> =
 static FORWARD_DESTINATION_NAME: Lazy<String> =
     Lazy::new(|| env::var("FORWARD_DESTINATION_NAME").expect("no forward destination name given"));
 
-static RSA_PRIVKEY: Lazy<RsaPrivateKey> = Lazy::new(|| {
-    let path = env::var("RSA_PRIVKEY")
-        .expect("RSA_PRIVKEY not set");
+#[rmc_struct(Proxy)]
+#[derive(Default)]
+struct DestinationHolder{
+    url: RwLock<String>
+}
 
-    RsaPrivateKey::read_pkcs8_pem_file(&path)
-        .expect("unable to read private key")
-});
+impl ProxyManagement for DestinationHolder{
+    async fn update_url(&self, new_url: String) -> Result<(), ErrorCode> {
+        println!("updating url");
 
-static RSA_PUBKEY: Lazy<RsaPublicKey> = Lazy::new(|| {
-    RSA_PRIVKEY.to_public_key()
-});
+        let mut url = self.url.write().await;
 
-static PUBKEY_ENCODED: Lazy<Document> = Lazy::new(|| {
-    RSA_PUBKEY.to_pkcs1_der().expect("unable to convert pubkey to der")
-});
+        *url = new_url;
 
-static RSA_SIGNKEY: Lazy<BlindedSigningKey<Sha256>> = Lazy::new(||
-    BlindedSigningKey::<Sha256>::new(RSA_PRIVKEY.clone())
-);
+        Ok(())
+    }
+}
+
 
 #[tokio::main]
 async fn main() {
     setup();
+
+    let conn =
+        rust_nex::reggie::rmc_connect_to(
+            "agmp-control.spfn.net",
+            Proxy {
+                addr: SocketAddrV4::new(*OWN_IP_PUBLIC, *SERVER_PORT),
+                cluster: Auth
+            },
+            |r| Arc::new(DestinationHolder::default())
+        ).await;
+    let dest_holder = conn.unwrap();
+
 
     let (router_secure, _) = Router::new(SocketAddrV4::new(*OWN_IP_PRIVATE, *SERVER_PORT))
         .await
@@ -76,9 +98,18 @@ async fn main() {
             return;
         };
 
+        let dest_holder = dest_holder.clone();
+
         task::spawn(async move {
+            let dest = dest_holder.url.read().await;
+
+            if *dest == ""{
+                warn!("no destination set yet but connection attempted");
+                return;
+            }
+
             let mut stream
-                = establish_tls_connection_to(FORWARD_DESTINATION.as_str(), FORWARD_DESTINATION_NAME.as_str()).await;
+                = establish_tls_connection_to(&dest, &dest).await;
 
             if let Err(e) = stream.send_buffer(&ConnectionInitData{
                 prudpsock_addr: conn.socket_addr,
@@ -113,6 +144,9 @@ async fn main() {
                             return;
                         }
                     },
+                    _ = sleep(Duration::from_secs(10)) => {
+                        conn.send([0,0,0,0,0].to_vec()).await;
+                    }
                 }
             }
         });
