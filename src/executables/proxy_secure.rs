@@ -13,7 +13,7 @@ use rust_nex::prudp::packet::VirtualPort;
 use rust_nex::prudp::router::Router;
 use rust_nex::prudp::secure::Secure;
 use rust_nex::prudp::unsecure::Unsecure;
-use rust_nex::reggie::{establish_tls_connection_to, ProxyManagement, RemoteController};
+use rust_nex::reggie::{establish_tls_connection_to, tls_connect_to, ProxyManagement, RemoteController};
 use rust_nex::rmc::response::ErrorCode;
 use rust_nex::rnex_proxy_common::ConnectionInitData;
 use rust_nex::reggie::ServerCluster::Auth;
@@ -92,8 +92,11 @@ async fn main() {
                 return;
             }
 
-            let mut stream
-                = establish_tls_connection_to(&dest, &dest).await;
+            let Ok(mut stream)
+                = tls_connect_to(&dest).await else {
+                error!("failed to connect");
+                return;
+            };
 
             if let Err(e) = stream.send_buffer(&ConnectionInitData{
                 prudpsock_addr: conn.socket_addr,

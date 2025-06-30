@@ -1,4 +1,4 @@
-use rust_nex::reggie::{RemoteController, UnitPacketRead};
+use rust_nex::reggie::{RemoteController, UnitPacketRead, WebStreamSocket};
 use log::{error, info};
 use once_cell::sync::Lazy;
 use rustls::client::danger::HandshakeSignatureValid;
@@ -65,7 +65,15 @@ async fn main() {
 
     let listen = TcpListener::bind(SocketAddrV4::new(*OWN_IP_PRIVATE, *SERVER_PORT)).await.unwrap();
 
+
+
     while let Ok((stream, addr)) = listen.accept().await {
+        let Ok(websocket) = tokio_tungstenite::accept_async(stream).await else {
+            continue;
+        };
+        
+        let stream = WebStreamSocket::new(websocket);
+
         let mut stream = match acceptor.accept(stream).await {
             Ok(v) => v,
             Err(e) => {

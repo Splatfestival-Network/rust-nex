@@ -16,7 +16,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_rustls::{TlsAcceptor, TlsConnector};
 use tokio_rustls::client::TlsStream;
-use tokio_tungstenite::{connect_async, WebSocketStream};
+use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
 use tokio_tungstenite::tungstenite::Message;
 use webpki::anchor_from_trusted_cert;
 use rust_nex::common::setup;
@@ -307,16 +307,22 @@ pub enum ConnectError{
     DataSendError(#[from] io::Error),
 }
 
-pub async fn rmc_connect_to<T: RmcCallable + Sync + Send + 'static, U: RmcSerialize, F>(url: &str, init_data: U, create_func: F) -> Result<Arc<T>, ConnectError>
-    where
-    F: FnOnce(RmcConnection) -> Arc<T>{
+pub async fn tls_connect_to(url: &str) -> Result<TlsStream<WebStreamSocket<MaybeTlsStream<TcpStream>>>, ConnectError>{
     let (stream, _)= connect_async(format!("ws://{}/", url)).await?;
 
     let webstreamsocket = WebStreamSocket::new(stream);
 
     let connector = get_configured_tls_connector().await;
 
-    let mut connection = connector.connect(ServerName::try_from(url.to_string()).unwrap(), webstreamsocket).await.unwrap();
+    let connection = connector.connect(ServerName::try_from(url.to_string()).unwrap(), webstreamsocket).await?;
+
+    Ok(connection)
+}
+
+pub async fn rmc_connect_to<T: RmcCallable + Sync + Send + 'static, U: RmcSerialize, F>(url: &str, init_data: U, create_func: F) -> Result<Arc<T>, ConnectError>
+    where
+    F: FnOnce(RmcConnection) -> Arc<T>{
+    let mut connection = tls_connect_to(url).await?;
 
     connection.send_buffer(&init_data.to_data()).await?;
 

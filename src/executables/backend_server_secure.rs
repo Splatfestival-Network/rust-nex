@@ -1,6 +1,6 @@
 use std::io::Cursor;
 use rust_nex::rmc::structures::RmcSerialize;
-use rust_nex::reggie::{RemoteController, UnitPacketRead};
+use rust_nex::reggie::{RemoteController, UnitPacketRead, WebStreamSocket};
 use std::net::SocketAddrV4;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU32;
@@ -50,6 +50,12 @@ async fn main() {
     MatchmakeManager::initialize_garbage_collect_thread(weak_mmm).await;
 
     while let Ok((stream, addr)) = listen.accept().await {
+        let Ok(websocket) = tokio_tungstenite::accept_async(stream).await else {
+            continue;
+        };
+
+        let stream = WebStreamSocket::new(websocket);
+        
         let mut stream = match acceptor.accept(stream).await {
             Ok(v) => v,
             Err(e) => {

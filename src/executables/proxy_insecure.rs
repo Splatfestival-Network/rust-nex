@@ -1,5 +1,5 @@
 
-use rust_nex::reggie::LocalProxy;
+use rust_nex::reggie::{tls_connect_to, LocalProxy};
 use std::env;
 use std::ffi::CStr;
 use std::io::{Read, Write};
@@ -107,8 +107,11 @@ async fn main() {
                 return;
             }
 
-            let mut stream
-                = establish_tls_connection_to(&dest, &dest).await;
+            let Ok(mut stream)
+                = tls_connect_to(&dest).await else {
+                error!("failed to connect");
+                return;
+            };
 
             if let Err(e) = stream.send_buffer(&ConnectionInitData{
                 prudpsock_addr: conn.socket_addr,
