@@ -107,10 +107,13 @@ async fn main() {
                 return;
             }
 
-            let Ok(mut stream)
-                = tls_connect_to(&dest).await else {
-                error!("failed to connect");
-                return;
+            let mut stream
+                = match tls_connect_to(&dest).await {
+                Ok(v) => v,
+                Err(e) => {
+                    error!("unable to connect: {}", e);
+                    return;
+                }
             };
 
             if let Err(e) = stream.send_buffer(&ConnectionInitData{

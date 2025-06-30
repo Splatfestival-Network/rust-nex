@@ -4,16 +4,19 @@ use std::time::Duration;
 use futures::future::Remote;
 use log::{error, warn};
 use macros::rmc_struct;
+use tokio::net::TcpStream;
 use tokio::sync::RwLock;
 use tokio::task;
 use tokio::time::sleep;
+use tokio_rustls::client::TlsStream;
+use tokio_tungstenite::MaybeTlsStream;
 use rust_nex::common::setup;
 use rust_nex::executables::common::{OWN_IP_PRIVATE, OWN_IP_PUBLIC, SERVER_PORT};
 use rust_nex::prudp::packet::VirtualPort;
 use rust_nex::prudp::router::Router;
 use rust_nex::prudp::secure::Secure;
 use rust_nex::prudp::unsecure::Unsecure;
-use rust_nex::reggie::{establish_tls_connection_to, tls_connect_to, ProxyManagement, RemoteController};
+use rust_nex::reggie::{establish_tls_connection_to, tls_connect_to, ConnectError, ProxyManagement, RemoteController, WebStreamSocket};
 use rust_nex::rmc::response::ErrorCode;
 use rust_nex::rnex_proxy_common::ConnectionInitData;
 use rust_nex::reggie::ServerCluster::Auth;
@@ -92,10 +95,13 @@ async fn main() {
                 return;
             }
 
-            let Ok(mut stream)
-                = tls_connect_to(&dest).await else {
-                error!("failed to connect");
-                return;
+            let mut stream
+                = match tls_connect_to(&dest).await {
+                Ok(v) => v,
+                Err(e) => {
+                    error!("unable to connect: {}", e);
+                    return;
+                }
             };
 
             if let Err(e) = stream.send_buffer(&ConnectionInitData{
