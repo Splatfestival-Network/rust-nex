@@ -1,4 +1,5 @@
 use std::hash::{DefaultHasher, Hasher};
+use std::net::SocketAddrV4;
 use std::sync::Arc;
 use crate::grpc::account;
 use crate::kerberos::{derive_key, KerberosDateTime, Ticket};
@@ -59,6 +60,13 @@ async fn get_login_data_by_pid(pid: u32) -> Option<(u32, [u8; 16])> {
     Some((pid, passwd))
 }
 
+fn station_url_from_sock_addr(sock_addr: SocketAddrV4) -> String{
+    format!(
+        "prudps:/PID=2;sid=1;stream=10;type=2;address={};port={};CID=1",
+        sock_addr.ip(), sock_addr.port()
+    )
+}
+
 impl Auth for AuthHandler {
     async fn login(&self, _name: String) -> Result<(), ErrorCode> {
         todo!()
@@ -97,7 +105,7 @@ impl Auth for AuthHandler {
         };
 
         let connection_data = ConnectionData {
-            station_url: addr,
+            station_url: station_url_from_sock_addr(addr),
             special_station_url: "".to_string(),
             //date_time: KerberosDateTime::new(1,1,1,1,1,1),
             date_time: KerberosDateTime::now(),
