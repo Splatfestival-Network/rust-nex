@@ -12,14 +12,14 @@ pub static OWN_IP_PRIVATE: Lazy<Ipv4Addr> = Lazy::new(|| {
     env::var("SERVER_IP")
         .ok()
         .and_then(|s| s.parse().ok())
-        .expect("no private ip specified")
+        .expect("SERVER_IP not specified")
 });
 
 pub static OWN_IP_PUBLIC: Lazy<Ipv4Addr> = Lazy::new(|| {
     env::var("SERVER_IP_PUBLIC")
         .ok()
         .and_then(|s| s.parse().ok())
-        .expect("no private ip specified")
+        .expect("SERVER_IP_PUBLIC not specified")
 });
 
 pub static SERVER_PORT: Lazy<u16> = Lazy::new(|| {
@@ -52,5 +52,5 @@ pub static FORWARD_DESTINATION: Lazy<SocketAddrV4> =
         env::var("FORWARD_DESTINATION")
             .ok()
             .and_then(|s| s.parse().ok())
-            .expect("SECURE_EDGE_NODE_HOLDER not set")
+            .expect("FORWARD_DESTINATION not set")
     );

@@ -46,7 +46,7 @@ async fn main() {
     let mut socket_secure = router_secure
         .add_socket(VirtualPort::new(1, 10), Secure(
             "6f599f81",
-            AUTH_SERVER_ACCOUNT.clone()
+            SECURE_SERVER_ACCOUNT.clone()
         ))
         .await
         .expect("unable to add socket");
