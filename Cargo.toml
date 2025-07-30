@@ -87,5 +87,5 @@ name = "backend_server_secure"
 path = "src/executables/backend_server_secure.rs"
 
 [[bin]]
-name = "control_server"
-path = "src/executables/control_server.rs"
+name = "edge_node_holder_server"
+path = "src/executables/edge_node_holder_server.rs"

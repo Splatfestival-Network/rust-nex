@@ -1,3 +1,4 @@
+use std::hash::{DefaultHasher, Hasher};
 use std::sync::Arc;
 use crate::grpc::account;
 use crate::kerberos::{derive_key, KerberosDateTime, Ticket};
@@ -10,7 +11,7 @@ use crate::rmc::structures::connection_data::ConnectionData;
 use crate::rmc::structures::qresult::QResult;
 use crate::{define_rmc_proto, kerberos};
 use macros::rmc_struct;
-use crate::reggie::{RemoteController, RemoteControllerManagement};
+use crate::reggie::{RemoteEdgeNodeHolder, RemoteEdgeNodeManagement};
 use crate::rmc::protocols::OnlyRemote;
 
 define_rmc_proto!(
@@ -24,7 +25,7 @@ pub struct AuthHandler {
     pub destination_server_acct: &'static Account,
     pub build_name: &'static str,
     //pub station_url: &'static str,
-    pub control_server: Arc<OnlyRemote<RemoteController>>,
+    pub control_server: Arc<OnlyRemote<RemoteEdgeNodeHolder>>,
 }
 
 pub fn generate_ticket(
@@ -86,8 +87,12 @@ impl Auth for AuthHandler {
         let ticket = generate_ticket(source_login_data, destination_login_data);
 
         let result = QResult::success(Core_Unknown);
+
+        let mut hasher = DefaultHasher::new();
+
+        hasher.write(name.as_bytes());
         
-        let Ok(addr) = self.control_server.get_secure_proxy_url().await else {
+        let Ok(addr) = self.control_server.get_url(hasher.finish()).await else {
             return Err(ErrorCode::Core_Exception);
         };
 

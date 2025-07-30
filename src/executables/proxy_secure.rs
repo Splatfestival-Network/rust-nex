@@ -11,58 +11,32 @@ use tokio::time::sleep;
 use tokio_rustls::client::TlsStream;
 use tokio_tungstenite::MaybeTlsStream;
 use rust_nex::common::setup;
-use rust_nex::executables::common::{OWN_IP_PRIVATE, OWN_IP_PUBLIC, SERVER_PORT};
+use rust_nex::executables::common::{AUTH_SERVER_ACCOUNT, FORWARD_DESTINATION, OWN_IP_PRIVATE, OWN_IP_PUBLIC, SECURE_EDGE_NODE_HOLDER, SECURE_SERVER_ACCOUNT, SERVER_PORT};
 use rust_nex::prudp::packet::VirtualPort;
 use rust_nex::prudp::router::Router;
 use rust_nex::prudp::secure::Secure;
 use rust_nex::prudp::unsecure::Unsecure;
-use rust_nex::reggie::{establish_tls_connection_to, tls_connect_to, ConnectError, ProxyManagement, RemoteController, WebStreamSocket};
+use rust_nex::reggie::EdgeNodeHolderConnectOption::{DontRegister, Register};
 use rust_nex::rmc::response::ErrorCode;
 use rust_nex::rnex_proxy_common::ConnectionInitData;
-use rust_nex::reggie::ServerCluster::Auth;
-use rust_nex::reggie::ServerType::Proxy;
-use rust_nex::reggie::UnitPacketWrite;
+use rust_nex::reggie::{RemoteEdgeNodeHolder, UnitPacketWrite};
 use rust_nex::rmc::structures::RmcSerialize;
 use rust_nex::reggie::UnitPacketRead;
-use rust_nex::rmc::protocols::RemoteInstantiatable;
-use rust_nex::reggie::LocalProxy;
-use rust_nex::reggie::RemoteControllerManagement;
-
-
-#[rmc_struct(Proxy)]
-struct DestinationHolder{
-    url: RwLock<String>,
-    controller: RemoteController
-}
-
-impl ProxyManagement for DestinationHolder{
-    async fn update_url(&self, new_url: String) -> Result<(), ErrorCode> {
-        let mut url = self.url.write().await;
-
-        *url = new_url;
-
-        Ok(())
-    }
-}
-
+use rust_nex::rmc::protocols::{new_rmc_gateway_connection, OnlyRemote, RemoteInstantiatable};
+use rust_nex::util::SplittableBufferConnection;
 
 #[tokio::main]
 async fn main() {
     setup();
 
-    let conn =
-        rust_nex::reggie::rmc_connect_to(
-            "agmp-control.spfn.net",
-            Proxy {
-                addr: SocketAddrV4::new(*OWN_IP_PUBLIC, *SERVER_PORT),
-                cluster: Auth
-            },
-            |r| Arc::new(DestinationHolder{
-                url: Default::default(),
-                controller: RemoteController::new(r)
-            })
-        ).await;
-    let dest_holder = conn.unwrap();
+    let conn = tokio::net::TcpStream::connect(&*SECURE_EDGE_NODE_HOLDER).await.unwrap();
+
+    let conn: SplittableBufferConnection = conn.into();
+
+    conn.send(Register(SocketAddrV4::new(*OWN_IP_PUBLIC, *SERVER_PORT).to_string()).to_data()).await;
+
+    let conn = new_rmc_gateway_connection(conn, |r| Arc::new(OnlyRemote::<RemoteEdgeNodeHolder>::new(r)));
+
 
 
     let (router_secure, _) = Router::new(SocketAddrV4::new(*OWN_IP_PRIVATE, *SERVER_PORT))
@@ -72,7 +46,7 @@ async fn main() {
     let mut socket_secure = router_secure
         .add_socket(VirtualPort::new(1, 10), Secure(
             "6f599f81",
-            dest_holder.controller.get_secure_account().await.unwrap()
+            AUTH_SERVER_ACCOUNT.clone()
         ))
         .await
         .expect("unable to add socket");
@@ -85,18 +59,9 @@ async fn main() {
             return;
         };
 
-        let dest_holder = dest_holder.clone();
-
         task::spawn(async move {
-            let dest = dest_holder.url.read().await;
-
-            if *dest == ""{
-                warn!("no destination set yet but connection attempted");
-                return;
-            }
-
             let mut stream
-                = match tls_connect_to(&dest).await {
+                = match TcpStream::connect(*FORWARD_DESTINATION).await {
                 Ok(v) => v,
                 Err(e) => {
                     error!("unable to connect: {}", e);

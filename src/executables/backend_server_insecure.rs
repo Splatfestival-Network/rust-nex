@@ -1,4 +1,4 @@
-use rust_nex::reggie::{RemoteController, UnitPacketRead, WebStreamSocket};
+use rust_nex::reggie::{RemoteEdgeNodeHolder, UnitPacketRead};
 use log::{error, info};
 use once_cell::sync::Lazy;
 use rustls::client::danger::HandshakeSignatureValid;
@@ -11,7 +11,6 @@ use rustls::{
 };
 use rustls_pki_types::PrivateKeyDer;
 use rust_nex::common::setup;
-use rust_nex::reggie::{get_configured_tls_acceptor, TestStruct, ROOT_TRUST_ANCHOR, SELF_CERT, SELF_KEY};
 use std::borrow::ToOwned;
 use std::{env, fs};
 use std::io::Cursor;
@@ -19,18 +18,18 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::sync::Arc;
 use macros::{method_id, rmc_proto, rmc_struct};
 use tokio::io::AsyncReadExt;
-use tokio::net::{TcpListener, TcpSocket};
+use tokio::net::{TcpListener, TcpSocket, TcpStream};
 use tokio::task;
 use tokio_rustls::TlsAcceptor;
 use rust_nex::define_rmc_proto;
-use rust_nex::executables::common::{OWN_IP_PRIVATE, SECURE_SERVER_ACCOUNT, SERVER_PORT};
+use rust_nex::executables::common::{OWN_IP_PRIVATE, SECURE_EDGE_NODE_HOLDER, SECURE_SERVER_ACCOUNT, SERVER_PORT};
 use rust_nex::nex::auth_handler::AuthHandler;
-use rust_nex::reggie::ServerCluster::Auth;
-use rust_nex::reggie::ServerType::Backend;
+use rust_nex::reggie::EdgeNodeHolderConnectOption::DontRegister;
 use rust_nex::rmc::protocols::{new_rmc_gateway_connection, OnlyRemote};
 use rust_nex::rmc::response::ErrorCode;
 use rust_nex::rmc::structures::RmcSerialize;
 use rust_nex::rnex_proxy_common::ConnectionInitData;
+use rust_nex::util::SplittableBufferConnection;
 
 pub static SECURE_PROXY_ADDR: Lazy<Ipv4Addr> = Lazy::new(|| {
     env::var("SECURE_PROXY_ADDR")
@@ -46,41 +45,25 @@ pub static SECURE_PROXY_PORT: Lazy<u16> = Lazy::new(|| {
         .unwrap_or(10000)
 });
 
+
+
 #[tokio::main]
 async fn main() {
     setup();
 
-    let conn = rust_nex::reggie::rmc_connect_to(
-        "agmp-control.spfn.net",
-        Backend{
-            name: "agmp-auth-1.spfn.net".to_string(),
-            cluster: Auth
-        },
-        |r| Arc::new(OnlyRemote::<RemoteController>::new(r))
-    ).await;
-    let conn = conn.unwrap();
+    let conn = TcpStream::connect(&*SECURE_EDGE_NODE_HOLDER).await.unwrap();
 
+    let conn: SplittableBufferConnection = conn.into();
 
-    let acceptor = get_configured_tls_acceptor().await;
+    conn.send(DontRegister.to_data()).await;
+
+    let conn = new_rmc_gateway_connection(conn, |r| Arc::new(OnlyRemote::<RemoteEdgeNodeHolder>::new(r)));
 
     let listen = TcpListener::bind(SocketAddrV4::new(*OWN_IP_PRIVATE, *SERVER_PORT)).await.unwrap();
 
 
 
-    while let Ok((stream, addr)) = listen.accept().await {
-        let Ok(websocket) = tokio_tungstenite::accept_async(stream).await else {
-            continue;
-        };
-        
-        let stream = WebStreamSocket::new(websocket);
-
-        let mut stream = match acceptor.accept(stream).await {
-            Ok(v) => v,
-            Err(e) => {
-                error!("an error ocurred whilest accepting tls connection: {:?}", e);
-                continue;
-            }
-        };
+    while let Ok((mut stream, addr)) = listen.accept().await {
         let buffer = match stream.read_buffer().await{
             Ok(v) => v,
             Err(e) => {

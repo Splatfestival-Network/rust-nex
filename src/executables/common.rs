@@ -40,4 +40,17 @@ pub static AUTH_SERVER_ACCOUNT: Lazy<Account> =
 pub static SECURE_SERVER_ACCOUNT: Lazy<Account> =
     Lazy::new(|| Account::new(2, "Quazal Rendez-Vous", &KERBEROS_SERVER_PASSWORD));
 
+pub static SECURE_EDGE_NODE_HOLDER: Lazy<SocketAddrV4> = Lazy::new(||{
+    env::var("SECURE_EDGE_NODE_HOLDER")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .expect("SECURE_EDGE_NODE_HOLDER not set")
+});
 
+pub static FORWARD_DESTINATION: Lazy<SocketAddrV4> =
+    Lazy::new(||
+        env::var("FORWARD_DESTINATION")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .expect("SECURE_EDGE_NODE_HOLDER not set")
+    );

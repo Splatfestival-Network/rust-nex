@@ -1,9 +1,9 @@
 
-use rust_nex::reggie::{tls_connect_to, LocalProxy};
+use rust_nex::reggie::RemoteEdgeNodeHolder;
 use std::env;
 use std::ffi::CStr;
 use std::io::{Read, Write};
-use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
+use std::net::{Ipv4Addr, SocketAddrV4};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use bytemuck::{Pod, Zeroable};
@@ -18,65 +18,38 @@ use rsa::pkcs1::EncodeRsaPublicKey;
 use rsa::pss::BlindedSigningKey;
 use rsa::signature::{RandomizedSigner, SignatureEncoding};
 use sha2::Sha256;
-use tokio::net::TcpSocket;
+use tokio::net::{TcpSocket, TcpStream};
 use tokio::sync::RwLock;
 use tokio::task;
 use tokio::time::sleep;
 use rust_nex::common::setup;
-use rust_nex::executables::common::{OWN_IP_PRIVATE, OWN_IP_PUBLIC, SERVER_PORT};
+use rust_nex::executables::common::{FORWARD_DESTINATION, OWN_IP_PRIVATE, OWN_IP_PUBLIC, SECURE_EDGE_NODE_HOLDER, SERVER_PORT};
 use rust_nex::prudp::packet::VirtualPort;
 use rust_nex::prudp::router::Router;
 use rust_nex::prudp::station_url::StationUrl;
 use rust_nex::prudp::unsecure::Unsecure;
-use rust_nex::reggie::{establish_tls_connection_to, ProxyManagement, UnitPacketRead, UnitPacketWrite};
-use rust_nex::reggie::ServerCluster::Auth;
-use rust_nex::reggie::ServerType::Proxy;
-use rust_nex::rmc::protocols::OnlyRemote;
+use rust_nex::reggie::{UnitPacketRead, UnitPacketWrite};
+use rust_nex::reggie::EdgeNodeHolderConnectOption::{DontRegister, Register};
+use rust_nex::rmc::protocols::{new_rmc_gateway_connection, OnlyRemote};
 use rust_nex::rmc::response::ErrorCode;
 use rust_nex::rmc::structures::RmcSerialize;
 use rust_nex::rnex_proxy_common::ConnectionInitData;
+use rust_nex::util::SplittableBufferConnection;
 
 
-
-static FORWARD_DESTINATION: Lazy<String> =
-    Lazy::new(|| env::var("FORWARD_DESTINATION").expect("no forward destination given"));
-static FORWARD_DESTINATION_NAME: Lazy<String> =
-    Lazy::new(|| env::var("FORWARD_DESTINATION_NAME").expect("no forward destination name given"));
-
-#[rmc_struct(Proxy)]
-#[derive(Default)]
-struct DestinationHolder{
-    url: RwLock<String>
-}
-
-impl ProxyManagement for DestinationHolder{
-    async fn update_url(&self, new_url: String) -> Result<(), ErrorCode> {
-        println!("updating url");
-
-        let mut url = self.url.write().await;
-
-        *url = new_url;
-
-        Ok(())
-    }
-}
 
 
 #[tokio::main]
 async fn main() {
     setup();
 
-    let conn =
-        rust_nex::reggie::rmc_connect_to(
-            "agmp-control.spfn.net",
-            Proxy {
-                addr: SocketAddrV4::new(*OWN_IP_PUBLIC, *SERVER_PORT),
-                cluster: Auth
-            },
-            |r| Arc::new(DestinationHolder::default())
-        ).await;
-    let dest_holder = conn.unwrap();
+    let conn = tokio::net::TcpStream::connect(&*SECURE_EDGE_NODE_HOLDER).await.unwrap();
 
+    let conn: SplittableBufferConnection = conn.into();
+
+    conn.send(Register(SocketAddrV4::new(*OWN_IP_PUBLIC, *SERVER_PORT).to_string()).to_data()).await;
+
+    let conn = new_rmc_gateway_connection(conn, |r| Arc::new(OnlyRemote::<RemoteEdgeNodeHolder>::new(r)));
 
     let (router_secure, _) = Router::new(SocketAddrV4::new(*OWN_IP_PRIVATE, *SERVER_PORT))
         .await
@@ -97,18 +70,9 @@ async fn main() {
             return;
         };
 
-        let dest_holder = dest_holder.clone();
-
         task::spawn(async move {
-            let dest = dest_holder.url.read().await;
-
-            if *dest == ""{
-                warn!("no destination set yet but connection attempted");
-                return;
-            }
-
             let mut stream
-                = match tls_connect_to(&dest).await {
+                = match TcpStream::connect(*FORWARD_DESTINATION).await {
                 Ok(v) => v,
                 Err(e) => {
                     error!("unable to connect: {}", e);
