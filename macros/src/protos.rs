@@ -325,10 +325,5 @@ impl ToTokens for RmcProtocolData{
         self.generate_raw_trait(tokens);
         self.generate_raw_info(tokens);
         self.generate_raw_remote_trait(tokens);
-
-
-
-
     }
 }
-
