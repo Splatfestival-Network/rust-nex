@@ -50,7 +50,7 @@ impl MatchmakeManager{
     async fn garbage_collect(&self){
         info!("running rnex garbage collector over all sessions and users");
 
-        let idx = 0;
+        let mut idx = 0;
 
         let mut to_be_deleted_gids = Vec::new();
 
@@ -69,6 +69,8 @@ impl MatchmakeManager{
             if !session.is_reachable(){
                 to_be_deleted_gids.push(gid);
             }
+
+            idx += 1;
         }
 
         let mut sessions = self.sessions.write().await;

@@ -269,6 +269,12 @@ impl MatchmakeExtension for User {
         let session = self.matchmake_manager.get_session(join_session_param.gid).await?;
 
         let mut session = session.lock().await;
+        
+        if session.session.user_password_enabled{
+            if join_session_param.user_password != session.session.user_password{
+                return Err(ErrorCode::RendezVous_InvalidPassword)
+            } 
+        }
 
         session.connected_players.retain(|v| v.upgrade().is_some_and(|v| v.pid != self.pid));
 
